@@ -1,4 +1,6 @@
+from setuptools import Command
 from setuptools import setup
+import subprocess
 
 # Metadata about the package
 NAME = 'jagereye'
@@ -18,6 +20,21 @@ TESTS_REQUIRED=[
     'pytest'
 ]
 
+class DocCommand(Command):
+    """Command to generate documentation."""
+
+    description = ''
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        subprocess.check_call(['doxygen', '.Doxyfile'])
+
 setup(
     name=NAME,
     version=VERSION,
@@ -25,5 +42,8 @@ setup(
     py_modules=['jagereye'],
     install_requires=INSTALL_REQUIRED,
     setup_requires=SETUP_REQUIRED,
-    tests_require=TESTS_REQUIRED
+    tests_require=TESTS_REQUIRED,
+    cmdclass = {
+        'doc': DocCommand
+    }
 )
