@@ -1,13 +1,18 @@
+"""The Blob class definition."""
+
 import numpy as np
+
 import pytest
 
 from jagereye.streaming.blob import Blob
+
 
 def create_blob(tensor_name=None, tensor=None):
     blob = Blob()
     if not (tensor_name is None) and not (tensor is None):
         blob.feed(tensor_name, tensor)
     return blob
+
 
 class TestBlob(object):
 

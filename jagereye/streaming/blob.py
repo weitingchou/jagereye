@@ -1,9 +1,12 @@
+"""The Blob class definition."""
+
 from six import string_types
 
 import numpy as np
 
+
 class Blob(object):
-    """The basic opeartion unit for streaming.
+    """The basic data unit for streaming.
 
     Blob is the basic data unit for streaming. A blob can contain zero, one or
     more float-like tensors (that is, numpy `ndarrays` which are float-like
@@ -35,7 +38,8 @@ class Blob(object):
         if not isinstance(tensor, np.ndarray):
             raise TypeError('Only numpy ndarray is supported for feeding.')
         if tensor.dtype.kind not in 'biuf':
-            raise TypeError('Only float-like types (bool, int, unsigned int and float) are supported for tensor.')
+            raise TypeError('Only float-like types (bool, int, unsigned '
+                            'int and float) are supported for tensor.')
 
         self._data[name] = tensor
 
@@ -110,7 +114,7 @@ class Blob(object):
         c_blob = Blob()
 
         for name, tensor in self._data.iteritems():
-            # XXX(JiaKuan Su): Currently, the tensors are copied during blob
+            # TODO(JiaKuan Su): Currently, the tensors are copied during blob
             # copying. Maybe we can also implement more efficient methods
             # such as copy-on-write.
             c_blob.feed(name, np.copy(tensor))
