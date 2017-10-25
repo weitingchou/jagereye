@@ -31,6 +31,17 @@ sudo python setup.py install
 ```bash
 python setup.py test
 ```
+### Documentation
+
+To generate the documentation, please follow the following steps:
+
+* Install [Doxygen](http://www.stack.nl/~dimitri/doxygen/)
+
+* In the project root directory, run the doc generating script, the generated documentation will be in `docs_output`.
+
+```bash
+python setup.py doc
+```
 
 ## Contributing
 
