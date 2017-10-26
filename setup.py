@@ -9,7 +9,8 @@ DESCRIPTION = 'A large distributed scale video analysis framework.'
 
 # Dependencies for installation
 INSTALL_REQUIRED = [
-    'numpy'
+    'numpy',
+    'six'
 ]
 
 # Dependencies for testing
