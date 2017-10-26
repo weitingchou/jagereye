@@ -1,4 +1,5 @@
 from setuptools import Command
+from setuptools import find_packages
 from setuptools import setup
 import subprocess
 
@@ -55,10 +56,11 @@ setup(
     name=NAME,
     version=VERSION,
     description=DESCRIPTION,
-    py_modules=['jagereye'],
+    packages=find_packages(),
     install_requires=INSTALL_REQUIRED,
     setup_requires=SETUP_REQUIRED,
     tests_require=TESTS_REQUIRED,
+    zip_safe=False,
     cmdclass = {
         'doc': DocCommand,
         'lint': LintCommand
