@@ -1,4 +1,4 @@
-"""The Blob class definition."""
+"""Tests for blob."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -11,13 +11,20 @@ from jagereye.streaming.blob import Blob
 
 
 def create_blob(tensor_name=None, tensor=None):
+    """Helper function to create a blob instance.
+
+    Args:
+      tensor_name (string): The fed tensor name. Defaults to None.
+      tensor (numpy `ndarray`): The fed tensor. Defaults to None.
+    """
     blob = Blob()
-    if not (tensor_name is None) and not (tensor is None):
+    if not tensor_name is None and not tensor is None:
         blob.feed(tensor_name, tensor)
     return blob
 
 
 class TestBlob(object):
+    """Tests for Blob class."""
 
     def test_feed_with_non_string_name(self):
         blob = Blob()
@@ -45,7 +52,8 @@ class TestBlob(object):
                       np.float16, np.float32, np.float64, np.float128,
                       np.bool]:
             tensor = np.random.rand(1, 2, 3).astype(dtype)
-            np.testing.assert_equal(tensor, blob.feed('float_like_ndarray', tensor))
+            np.testing.assert_equal(tensor,
+                                    blob.feed('float_like_ndarray', tensor))
 
     def test_has_with_non_string_name(self):
         blob = create_blob()
@@ -104,6 +112,9 @@ class TestBlob(object):
         blob.feed('tensor_b', tensor_b)
 
         c_blob = blob.copy()
-        np.testing.assert_equal(blob.fetch('tensor_f'), c_blob.fetch('tensor_f'))
-        np.testing.assert_equal(blob.fetch('tensor_i'), c_blob.fetch('tensor_i'))
-        np.testing.assert_equal(blob.fetch('tensor_b'), c_blob.fetch('tensor_b'))
+        np.testing.assert_equal(blob.fetch('tensor_f'),
+                                c_blob.fetch('tensor_f'))
+        np.testing.assert_equal(blob.fetch('tensor_i'),
+                                c_blob.fetch('tensor_i'))
+        np.testing.assert_equal(blob.fetch('tensor_b'),
+                                c_blob.fetch('tensor_b'))

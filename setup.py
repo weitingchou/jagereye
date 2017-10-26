@@ -24,7 +24,7 @@ TESTS_REQUIRED=[
 class DocCommand(Command):
     """Command to generate documentation."""
 
-    description = ''
+    description = 'Generate documentation.'
     user_options = []
 
     def initialize_options(self):
@@ -36,6 +36,21 @@ class DocCommand(Command):
     def run(self):
         subprocess.check_call(['doxygen', '.Doxyfile'])
 
+class LintCommand(Command):
+    """Command to lint source code."""
+
+    description = 'Lint source code.'
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        subprocess.check_call(['pylint', 'jagereye'])
+
 setup(
     name=NAME,
     version=VERSION,
@@ -45,6 +60,7 @@ setup(
     setup_requires=SETUP_REQUIRED,
     tests_require=TESTS_REQUIRED,
     cmdclass = {
-        'doc': DocCommand
+        'doc': DocCommand,
+        'lint': LintCommand
     }
 )
