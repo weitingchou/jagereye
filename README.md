@@ -31,6 +31,19 @@ sudo python setup.py install
 ```bash
 python setup.py test
 ```
+
+### Lint
+
+To lint the source code, please follow the following steps:
+
+* Install [Pylint](https://www.pylint.org/)
+
+* In the project root directory, run the lint script.
+
+```bash
+python setup.py lint
+```
+
 ### Documentation
 
 To generate the documentation, please follow the following steps:
@@ -47,7 +60,11 @@ python setup.py doc
 
 ### Coding Style Guildline
 
-In this project, we follow [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html). To learn how to write docstrings, [Example Google Style Python Docstrings](http://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) is a good example.
+* Follow [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html).
+
+* To learn how to write docstrings, [Example Google Style Python Docstrings](http://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) is a good example.
+
+* See [Lint Section](#lint) to lint source code.
 
 ### Python 2 and 3 Compatible
 
