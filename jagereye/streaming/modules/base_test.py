@@ -1,4 +1,4 @@
-"""Tests for module."""
+"""Tests for base modules."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -6,7 +6,7 @@ from __future__ import print_function
 
 import pytest
 
-from jagereye.streaming.modules.module import IModule
+from jagereye.streaming.modules.base import IModule
 
 
 class TestIModule(object):

@@ -8,7 +8,7 @@ import abc
 
 
 class IModule(object):
-    """The base module definition.
+    """The base module interface.
 
     Module is the basic operation unit in the streaming pipeline. The base of
     modules is `IModule` class, which provides interface of module lifecycle
