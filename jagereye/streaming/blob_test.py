@@ -7,20 +7,8 @@ from __future__ import print_function
 import numpy as np
 import pytest
 
+from jagereye.framework.test_util import create_blob
 from jagereye.streaming.blob import Blob
-
-
-def create_blob(tensor_name=None, tensor=None):
-    """Helper function to create a blob instance.
-
-    Args:
-      tensor_name (string): The fed tensor name. Defaults to None.
-      tensor (numpy `ndarray`): The fed tensor. Defaults to None.
-    """
-    blob = Blob()
-    if not tensor_name is None and not tensor is None:
-        blob.feed(tensor_name, tensor)
-    return blob
 
 
 class TestBlob(object):
