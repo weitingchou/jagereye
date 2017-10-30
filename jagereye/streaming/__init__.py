@@ -9,10 +9,18 @@ from jagereye.streaming.blob import Blob
 
 # Modules
 from jagereye.streaming.modules.base import IModule
+from jagereye.streaming.modules.grayscale_modules import GrayscaleModule
+
+# Capturers
+from jagereye.streaming.capturers.base import ICapturer
+
 
 __all__ = [
     # Blob
     'Blob',
     # Modules
-    'IModule'
+    'IModule',
+    'GrayscaleModule',
+    # Capturers
+    'ICapturer'
 ]
