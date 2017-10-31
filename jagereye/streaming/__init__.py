@@ -13,6 +13,7 @@ from jagereye.streaming.modules.grayscale_modules import GrayscaleModule
 
 # Capturers
 from jagereye.streaming.capturers.base import ICapturer
+from jagereye.streaming.capturers.stream_capturers import VideoStreamCapturer
 
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     'IModule',
     'GrayscaleModule',
     # Capturers
-    'ICapturer'
+    'ICapturer',
+    'VideoStreamCapturer'
 ]

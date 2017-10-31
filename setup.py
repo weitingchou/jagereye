@@ -56,7 +56,7 @@ setup(
     name=NAME,
     version=VERSION,
     description=DESCRIPTION,
-    packages=find_packages(),
+    packages=find_packages(exclude='testdata'),
     install_requires=INSTALL_REQUIRED,
     setup_requires=SETUP_REQUIRED,
     tests_require=TESTS_REQUIRED,
