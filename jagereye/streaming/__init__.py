@@ -15,6 +15,9 @@ from jagereye.streaming.modules.grayscale_modules import GrayscaleModule
 from jagereye.streaming.capturers.base import ICapturer
 from jagereye.streaming.capturers.stream_capturers import VideoStreamCapturer
 
+# Pipeline
+from jagereye.streaming.pipeline import Pipeline
+
 
 __all__ = [
     # Blob
@@ -24,5 +27,7 @@ __all__ = [
     'GrayscaleModule',
     # Capturers
     'ICapturer',
-    'VideoStreamCapturer'
+    'VideoStreamCapturer',
+    # Pipeline
+    'Pipeline'
 ]

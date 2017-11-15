@@ -5,8 +5,22 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+from pytest_mock import MockFixture
 
 from jagereye.streaming.blob import Blob
+
+
+def spy(obj, name):
+    """Spy a object method.
+
+    Args:
+      obj (object): The object instance.
+      name (string): The object method name to spy.
+
+    Returns:
+      function: The spy object.
+    """
+    return MockFixture(None).spy(obj, name)
 
 
 def create_blob(tensor_name=None, tensor=None):

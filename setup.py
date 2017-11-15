@@ -19,7 +19,8 @@ SETUP_REQUIRED=[
     'pytest-runner'
 ],
 TESTS_REQUIRED=[
-    'pytest'
+    'pytest',
+    'pytest-mock'
 ]
 
 class DocCommand(Command):
