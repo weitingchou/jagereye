@@ -7,7 +7,7 @@ from __future__ import print_function
 import numpy as np
 import pytest
 
-from jagereye.framework.test_util import create_blob
+from jagereye.util.test_util import create_blob
 from jagereye.streaming.blob import Blob
 
 

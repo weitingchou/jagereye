@@ -9,7 +9,7 @@ import time
 import numpy as np
 import pytest
 
-from jagereye.framework.test_util import spy
+from jagereye.util.test_util import spy
 from jagereye.streaming.blob import Blob
 from jagereye.streaming.capturers.base import ICapturer
 from jagereye.streaming.modules.base import IModule

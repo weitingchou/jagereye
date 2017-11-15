@@ -7,9 +7,9 @@ from __future__ import print_function
 import numpy as np
 import pytest
 
-from jagereye.framework.test_util import create_blob
-from jagereye.framework.test_util import create_image_full
-from jagereye.framework.test_util import create_image_rand
+from jagereye.util.test_util import create_blob
+from jagereye.util.test_util import create_image_full
+from jagereye.util.test_util import create_image_rand
 from jagereye.streaming.modules.grayscale_modules import GrayscaleModule
 
 
