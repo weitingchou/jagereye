@@ -4,6 +4,14 @@ JagerEye is a large distributed scale video analysis framework.
 
 ## Installation
 
+* Install Python binding for OpenCV (>=2.4.0) that is compiled with FFmpeg.
+
+```bash
+# Install Python binding for OpenCV from distrubtion package or OpenCV compiled with FFmpeg.
+# Please do not install from pip, it is not compiled with FFmpeg.
+sudo apt-get install python-opencv
+```
+
 * Clone the project into your file system.
 
 ```bash
