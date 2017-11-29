@@ -14,7 +14,7 @@ class Blob(object):
 
     Blob is the basic data unit for streaming. A blob can contain zero, one or
     more float-like tensors (that is, numpy `ndarrays` which are float-like
-    types).
+    types) or string tensors.
     """
 
     def __init__(self):
@@ -28,7 +28,7 @@ class Blob(object):
           name (string): The name of the tensor.
           tensor (numpy `ndarray`): A numpy `ndarray` object to fed into the
             blob. The data types must be float-like (bool, int, unsigned
-            int and float).
+            int and float) or string.
 
         Returns:
           Fed tensor (numpy `ndarray`) if successful.
@@ -41,7 +41,7 @@ class Blob(object):
             raise TypeError('Tensor name must be a string.')
         if not isinstance(tensor, np.ndarray):
             raise TypeError('Only numpy ndarray is supported for feeding.')
-        if tensor.dtype.kind not in 'biuf':
+        if tensor.dtype.kind not in 'biufS':
             raise TypeError('Only float-like types (bool, int, unsigned '
                             'int and float) are supported for tensor.')
 
