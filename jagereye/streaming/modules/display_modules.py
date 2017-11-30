@@ -7,7 +7,6 @@ from __future__ import print_function
 import cv2
 
 from jagereye.streaming.modules.base import IModule
-from jagereye.util import logging
 
 
 class DisplayModule(IModule):
@@ -57,7 +56,8 @@ class DisplayModule(IModule):
             # TODO(JiaKuan Su): Handle multiple blobs.
             image = blobs[0].fetch(self._image_name)
             if image.ndim != 2 and image.ndim != 3:
-                raise RuntimeError('The input "image" tensor is not 3-dimensional.')
+                raise RuntimeError('The input "image" tensor is not '
+                                   '3-dimensional.')
             cv2.imshow(self._window_name, image)
             cv2.waitKey(1)
         return blobs
