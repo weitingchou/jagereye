@@ -38,9 +38,9 @@ def _operate(modules, batch_size, wait_interval, queue, stop_event):
             except Exception: # pylint: disable=broad-except
                 # TODO(JiaKuan Su): Handle more exception cases.
                 stop_event.set()
-        # FIXME(JiaKuan Su): Use sleep with wait_interval_sec may cause some
-        # unnecessary delays. Please help fix it.
-        time.sleep(wait_interval_sec)
+        else:
+            # Sleep only when queue size is not enough.
+            time.sleep(wait_interval_sec)
 
 
 class Pipeline(object):
