@@ -4,6 +4,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import datetime
 import os
 
 import pytest
@@ -31,11 +32,17 @@ class TestVideoStreamCapturer(object):
 
         blob = capturer.capture()
         image = blob.fetch('image')
-        # Test dimension and shape of the captured image
+        # Test dimension and shape of the captured image.
         assert image.ndim == 3
         assert image.shape[0] == 240
         assert image.shape[1] == 320
         assert image.shape[2] == 3
+        # Test the timestamp.
+        timestamp = str(blob.fetch('timestamp'))
+        date_timestamp = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')
+        date_now = datetime.datetime.now()
+        time_delta = (date_now - date_timestamp).total_seconds()
+        assert time_delta < 0.2
 
         capturer.destroy()
 
