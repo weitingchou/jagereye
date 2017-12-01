@@ -127,7 +127,7 @@ class Pipeline(object):
           TypeError: if module is not a `IModule` instance.
         """
         if not isinstance(module, IModule):
-            raise TypeError('Module must a ICapturer instance.')
+            raise TypeError('Module must a IModule instance.')
         self._modules.append(module)
         return self
 
