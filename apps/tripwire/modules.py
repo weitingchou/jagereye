@@ -1,10 +1,24 @@
 """The modules used by tripwire worker."""
 
+import threading
+import Queue
+
+import cv2
 import numpy as np
 import tensorflow as tf
 
 from jagereye.streaming import IModule
 from jagereye.util import logging
+
+
+class _ModeEnum(object):
+    """Enum for modes."""
+    NORMAL = 0
+    ALERT_START = 1
+    ALERTING = 2
+    ALERT_END = 3
+
+_MODE = _ModeEnum()
 
 
 class ObjectDetectionModule(IModule):
@@ -216,6 +230,171 @@ class InRegionDetectionModule(IModule):
         return np.array(in_region_labels)
 
 
+class TripwireModeModule(IModule):
+    # TODO(JiaKuan Su): Please fill the detailed docstring.
+    """The module for maintaining the tripwire mode."""
+
+    def __init__(self, reserved_count):
+        self._reserved_count = reserved_count
+        self._not_detected_counter = 0
+        self._mode = _MODE.NORMAL
+
+    def prepare(self):
+        pass
+
+    def execute(self, blobs):
+        # TODO(JiaKuan Su): Currently, I only handle the case for batch_size=1,
+        # please help complete the case for batch_size>1.
+        blob = blobs[0]
+        in_region_labels = blob.fetch('in_region_labels')
+
+        # Mode switch.
+        if self._mode == _MODE.NORMAL:
+            if in_region_labels.shape[0] > 0:
+                self._mode = _MODE.ALERT_START
+        elif self._mode == _MODE.ALERT_START:
+            self._mode = _MODE.ALERTING
+            self._not_detected_counter = 0
+        elif self._mode == _MODE.ALERTING:
+            if in_region_labels.shape[0] > 0:
+                self._not_detected_counter = 0
+            else:
+                self._not_detected_counter += 1
+            if self._not_detected_counter == self._reserved_count:
+                self._mode = _MODE.ALERT_END
+        elif self._mode == _MODE.ALERT_END:
+            self._mode = _MODE.NORMAL
+
+        blob.feed('mode', np.array(self._mode))
+
+        return blobs
+
+    def destroy(self):
+        pass
+
+
+def _record_video(file_name, fps, video_size, queue, codec='MJPG'):
+    """Threading function to record a video.
+
+    Args:
+      file_name (string): The name of recorded video.
+      fps (int): The FPS of recorded video.
+      video_size (tuple): The size of recorded video. The tuple contains:
+        width (int): The video width.
+        height (int): The video height.
+      queue (`Queue.Queue`): The task queue.
+      coded (string): The codec of recorded video. Defaults to 'MJPG'.
+    """
+    # TODO(JiaKuan Su): MJPEG is heavy, please use another codec, such as h264.
+    if cv2.__version__.startswith('2.'):
+        # OpenCV 2.X
+        fourcc = cv2.cv.FOURCC(*codec)
+    else:
+        # OpenCV 3.X
+        fourcc = cv2.VideoWriter_fourcc(*codec)
+    video_writer = cv2.VideoWriter(file_name, fourcc, fps, video_size)
+
+    while True:
+        task = queue.get(block=True)
+        command = task['command']
+        if command == 'RECORD':
+            video_writer.write(task['image'])
+        elif command == 'END':
+            break
+
+    video_writer.release()
+
+
+class VideoRecordModule(IModule):
+    # TODO(JiaKuan Su): Please fill the detailed docstring.
+    """The module for recording video clips."""
+
+    def __init__(self, reserved_count, fps, image_name='image'):
+        """Create a new `VideoRecordModule`.
+
+        Args:
+          reserved_count (int): The number of reseved images before alert mode.
+          fps (int): The FPS of recorded video.
+          image_name (string): The name of input tensor to read. Defaults to
+            "image".
+        """
+        self._reserved_count = reserved_count
+        self._fps = fps
+        self._image_name = image_name
+        self._reserved_images = []
+        self._file_name = None
+        self._video_writer = None
+        self._queue = None
+
+    def prepare(self):
+        """The routine of module preparation."""
+        pass
+
+    def execute(self, blobs):
+        # TODO(JiaKuan Su): Please fill the detailed docstring.
+        """The routine of module execution."""
+        # TODO(JiaKuan Su): Currently, I only handle the case for batch_size=1,
+        # please help complete the case for batch_size>1.
+        blob = blobs[0]
+        image = blob.fetch(self._image_name)
+        im_width = image.shape[1]
+        im_height = image.shape[0]
+        timestamp = str(blob.fetch('timestamp'))
+        mode = int(blob.fetch('mode'))
+
+        # Check the dimension of image tensor.
+        if image.ndim != 3:
+            raise RuntimeError('The input "image" tensor is not 3-dimensional.')
+
+        # Insert the newest image to reserved buffer.
+        self._reserved_images.append(image)
+        # Remove the oldest image from the reserved buffer if necessary.
+        if len(self._reserved_images) > self._reserved_count:
+            self._reserved_images.pop(0)
+
+        # Handle alert mode.
+        if mode == _MODE.ALERT_START:
+            # TODO(JiaKuan Su): Browser can't play avi files, use mp4 instead.
+            self._file_name = '{}.avi'.format(timestamp)
+            video_size = (im_width, im_height)
+            self._queue = Queue.Queue()
+            args = (self._file_name, self._fps, video_size, self._queue,)
+            self._video_recorder = threading.Thread(target=_record_video,
+                                                    args=args)
+            self._video_recorder.setDaemon(True)
+            self._video_recorder.start()
+            for reserved_image in self._reserved_images:
+                self._queue.put({
+                    'command': 'RECORD',
+                    'image': reserved_image
+                })
+            logging.info('Start recording {}'.format(self._file_name))
+        elif mode == _MODE.ALERTING:
+            self._queue.put({
+                'command': 'RECORD',
+                'image': image
+            })
+        elif mode == _MODE.ALERT_END:
+            self._queue.put({
+                'command': 'END'
+            })
+            logging.info('End recording {}'.format(self._file_name))
+            self._file_name = None
+            self._video_writer = None
+            self._queue = None
+
+        return blobs
+
+    def destroy(self):
+        """The routine of module destruction."""
+        if not self._video_recorder is None:
+            logging.warn('Video recorder has not finished yet, '
+                         'stop it elegantly')
+            self._queue.put({
+                'command': 'END'
+            })
+
+
 class OutputModule(IModule):
     # TODO(JiaKuan Su): Please fill the detailed docstring.
     """The module to output the results."""
@@ -273,17 +452,17 @@ class DrawTripwireModule(IModule):
     def execute(self, blobs):
         # TODO(JiaKuan Su): Please fill the detailed docstring.
         """The routine of module execution."""
-        for blob in blobs:
-            image = blob.fetch('image')
-            in_region_labels = blob.fetch('in_region_labels')
-            if in_region_labels.shape[0] > 0:
-                color = self._alert_color
-            else:
-                color = self._normal_color
-            drawn_image = image.astype(np.uint32).copy()
-            drawn_image = self._draw_tripwire(drawn_image, color)
-            drawn_image = drawn_image.astype(np.uint8)
-            blob.feed('drawn_image', drawn_image)
+        # TODO(JiaKuan Su): Currently, I only handle the case for batch_size=1,
+        # please help complete the case for batch_size>1.
+        blob = blobs[0]
+        image = blob.fetch('image')
+        mode = int(blob.fetch('mode'))
+        if mode == _MODE.NORMAL:
+            color = self._normal_color
+        else:
+            color = self._alert_color
+        drawn_image = self._draw_tripwire(image, color)
+        blob.feed('drawn_image', drawn_image)
 
         return blobs
 
@@ -304,8 +483,10 @@ class DrawTripwireModule(IModule):
         """
         (xmin, ymin, xmax, ymax) = (self._region[0], self._region[1],
                                     self._region[2], self._region[3])
+        drawn_image = image.astype(np.uint32).copy()
         for c in range(3):
-            image[ymin:ymax, xmin:xmax, c] = \
+            drawn_image[ymin:ymax, xmin:xmax, c] = \
                 image[ymin:ymax, xmin:xmax, c] * (1 - alpha) \
                 + alpha * color[c] * 255
-        return image
+        drawn_image = drawn_image.astype(np.uint8)
+        return drawn_image
