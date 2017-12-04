@@ -10,11 +10,15 @@ from modules import DrawTripwireModule
 from modules import InRegionDetectionModule
 from modules import ObjectDetectionModule
 from modules import OutputModule
+from modules import TripwireModeModule
+from modules import VideoRecordModule
 
 
 MODEL_NAME = 'ssd_mobilenet_v1_coco_11_06_2017'
 LABELS_PATH = 'coco.labels'
 LABELS_TO_FIND = ['person']
+FPS = 15
+RESERVED_SECONDS = 3
 VISUALIZE = True
 NORMAL_COLOR = (226, 137, 59)
 ALERT_COLOR = (66, 194, 244)
@@ -47,6 +51,8 @@ def normalize_color(color):
 
 
 def main(task_info):
+    cap_interval = 1000.0 / FPS
+    reserved_count = FPS * RESERVED_SECONDS
     category_index = create_category_index(LABELS_PATH)
     ckpt_path = get_ckpt_path(MODEL_NAME)
     normal_color = normalize_color(NORMAL_COLOR)
@@ -54,18 +60,22 @@ def main(task_info):
     src = task_info['src']
     region = task_info['region']
 
-    pipeline = Pipeline(cap_interval=100)
+    pipeline = Pipeline(cap_interval=cap_interval)
 
     pipeline.source(VideoStreamCapturer(src)) \
             .pipe(ObjectDetectionModule(ckpt_path)) \
             .pipe(InRegionDetectionModule(category_index,
                                           region,
                                           LABELS_TO_FIND)) \
+            .pipe(TripwireModeModule(reserved_count=reserved_count)) \
+            .pipe(DrawTripwireModule(region, normal_color, alert_color)) \
+            .pipe(VideoRecordModule(reserved_count,
+                                    FPS,
+                                    image_name='drawn_image')) \
             .pipe(OutputModule())
 
     if VISUALIZE:
-        pipeline.pipe(DrawTripwireModule(region, normal_color, alert_color)) \
-                .pipe(DisplayModule(image_name='drawn_image'))
+        pipeline.pipe(DisplayModule(image_name='drawn_image'))
 
     pipeline.start()
     pipeline.await_termination()
