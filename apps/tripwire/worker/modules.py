@@ -1,7 +1,7 @@
 """The modules used by tripwire worker."""
 
 import threading
-import Queue
+from queue import Queue
 
 import cv2
 import numpy as np
@@ -282,7 +282,7 @@ def _record_video(file_name, fps, video_size, queue, codec='MJPG'):
       video_size (tuple): The size of recorded video. The tuple contains:
         width (int): The video width.
         height (int): The video height.
-      queue (`Queue.Queue`): The task queue.
+      queue (`queue.Queue`): The task queue.
       coded (string): The codec of recorded video. Defaults to 'MJPG'.
     """
     # TODO(JiaKuan Su): MJPEG is heavy, please use another codec, such as h264.
@@ -357,7 +357,7 @@ class VideoRecordModule(IModule):
             # TODO(JiaKuan Su): Browser can't play avi files, use mp4 instead.
             self._file_name = '{}.avi'.format(timestamp)
             video_size = (im_width, im_height)
-            self._queue = Queue.Queue()
+            self._queue = queue.Queue()
             args = (self._file_name, self._fps, video_size, self._queue,)
             self._video_recorder = threading.Thread(target=_record_video,
                                                     args=args)

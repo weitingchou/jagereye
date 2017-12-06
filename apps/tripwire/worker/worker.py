@@ -5,6 +5,7 @@ import os
 from jagereye.streaming import VideoStreamCapturer
 from jagereye.streaming import DisplayModule
 from jagereye.streaming import Pipeline
+from jagereye.worker import Worker
 
 from modules import DrawTripwireModule
 from modules import InRegionDetectionModule
@@ -50,7 +51,13 @@ def normalize_color(color):
     return (norms[0], norms[1], norms[2])
 
 
-def main(task_info):
+def worker_fn():
+    task_info = {
+        # 'src': 'rtsp://192.168.0.3/stream1',
+        'src': '/home/feabrbries/ml_related/dataset/tripwire/motocycle.mp4',
+        'region': (100, 100, 400, 400)
+    }
+
     cap_interval = 1000.0 / FPS
     reserved_count = FPS * RESERVED_SECONDS
     category_index = create_category_index(LABELS_PATH)
@@ -81,8 +88,14 @@ def main(task_info):
     pipeline.await_termination()
 
 
+def main():
+    worker = Worker("nats://localhost:4222")
+    alert = worker.alert_to_brain
+
+    worker.register_pipeline(worker_fn)
+
+    worker.start()
+
+
 if __name__ == '__main__':
-    main({
-        'src': 'rtsp://192.168.0.3/stream1',
-        'region': (100, 100, 400, 400)
-    })
+    main()
