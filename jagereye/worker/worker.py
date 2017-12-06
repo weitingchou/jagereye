@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import json
 
-from timer import Timer
+from jagereye.worker.timer import Timer
 
 import threading 
 
@@ -13,11 +13,12 @@ import threading
 CH_BRAIN = "ch_brain"
 
 class Worker(object):
-    def __init__(self):
+    def __init__(self, mq_host):
         self._main_loop = asyncio.get_event_loop()
         
         # TODO: check NATS is connected to server, error handler
         # connect NATs server, default is nats://localhost:4222
+        # TODO: check mq_host is valid
         self._nats_cli = NATS()
         self._worker_id = self._gen_worker_id()
         self._ch_worker_to_brain = self._gen_ch_WtoB() 
@@ -25,11 +26,11 @@ class Worker(object):
         self.pipeline = None
         # TODO: self._status = "initial"
         self._subscribes = []
-
+        self._mq_host = mq_host
     async def _setup(self):
         # TODO: need error handler
         # bind to an event loop
-        await self._nats_cli.connect(io_loop=self._main_loop)
+        await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
 
 
         # start handshake to brain
