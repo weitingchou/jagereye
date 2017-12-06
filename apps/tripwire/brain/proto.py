@@ -7,8 +7,7 @@ import ast
 
 import time
 
-CHANNEL_NAME = "ch_api_brain"
-CH_HEARTBEAT = "ch_heartbeat"
+CH_API_TO_BRAIN = "ch_api_brain"
 
 # channel for worker handshake
 CH_PUBLIC_BRAIN = "ch_brain"
@@ -17,44 +16,8 @@ CH_PUBLIC_BRAIN = "ch_brain"
 CH_WORKER_TO_BRAIN = ""
 CH_BRAIN_TO_WORKER = ""
 
-#def create_cam_exec(data):
-#    i = 0
-#    while(i<10000000):
-#        if i%200000 == 0:
-#            print(str(i)+"  "+str(data))
-#        i = i+1
-#def finish_cb(task):
-#    res = task.result()
-#    print(res)
-#    print("finish!!!!")
-#        
-#
-#async def api_handler(msg):
-#    subject = msg.subject
-#    reply = msg.reply
-#    data = msg.data.decode()
-#    print("Received a message on '{subject} {reply}': {data}".format(subject=subject, reply=reply, data=data))
-#    
-#    data = ast.literal_eval(data)
-#
-#    start = time.time()
-#    data["start"] = start
-#    create_cam = loop.run_in_executor(None, create_cam_exec, data)
-#    create_cam.add_done_callback(finish_cb)
-#
-#
-
-
-async def hb_handler(msg):
-    subject = msg.subject
-    reply = msg.reply
-    data = msg.data.decode()
-    print("Received a hb on '{subject} {reply}': {data}".format(subject=subject, reply=reply, data=data))
-
-
 async def run(loop):
     nc = NATS()
-
     await nc.connect(io_loop=loop)
 
     async def private_worker_handler(recv):
@@ -72,6 +35,8 @@ async def run(loop):
         if verb == "hshake-3":
             # TODO: update the status of the worker
             print("finish handshake!!")
+        if verb == "hbeat":
+            print("hbeat!!: "+str(msg))
 
     async def public_brain_handler(recv):
         ch = recv.subject
@@ -103,9 +68,38 @@ async def run(loop):
             await nc.publish(CH_BRAIN_TO_WORKER, str(hshake_reply).encode())
             # TODO: check the channel have been subscribed or not?
             # should not be double subscribed
-            await nc.subscribe(CH_WORKER_TO_BRAIN, cb=private_worker_handler)
-    # await nc.subscribe(CHANNEL_NAME, cb=api_handler)
-    await nc.subscribe(CH_HEARTBEAT, cb=hb_handler)
+            await nc.subscribe(CH_WORKER_TO_BRAIN, cb=private_worker_handler) 
+
+    def create_cam_exec(data):
+        i = 0
+        while(i<10000000):
+            if i%200000 == 0:
+                print(str(i)+"  "+str(data))
+            i = i+1
+    def finish_cb(task):
+        res = task.result()
+        print(res)
+        print("finish!!!!")
+
+    async def api_handler(recv):
+        ch = recv.subject
+        reply = recv.reply
+        msg = recv.data.decode()
+        # TODO: what if json cannot loads?
+        msg = json.loads(msg.replace("'", '"'))
+        # TODO: check the receive msg
+        # and change the status of the worker
+
+        await nc.publish(reply, str("Im fine thank u").encode())
+        print("Received in api_handler() '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
+
+        #start = time.time()
+        #data["start"] = start
+        #create_cam = loop.run_in_executor(None, create_cam_exec, data)
+        #create_cam.add_done_callback(finish_cb)
+
+
+    await nc.subscribe(CH_API_TO_BRAIN, cb=api_handler)
     await nc.subscribe(CH_PUBLIC_BRAIN, cb=public_brain_handler)
 
 
