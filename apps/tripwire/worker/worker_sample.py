@@ -1,7 +1,7 @@
-import proto 
+# TODO: need to replace to PYTHONPATH
 
-worker = proto.Worker()
-
+from jagereye.worker import Worker
+worker = Worker("nats://localhost:4222")
 
 alert = worker.alert_to_brain 
 
