@@ -1,7 +1,7 @@
 # TODO: need to replace to PYTHONPATH
 
 from jagereye.worker import Worker
-worker = Worker("nats://localhost:4222")
+worker = Worker("nats://192.168.1.2:4222")
 
 alert = worker.alert_to_brain 
 
