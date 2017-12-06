@@ -11,7 +11,7 @@ CHANNEL_NAME = "ch_api_brain"
 CH_HEARTBEAT = "ch_heartbeat"
 
 # channel for worker handshake
-CH_WORKER = "ch_brain"
+CH_PUBLIC_BRAIN = "ch_brain"
 
 # memory db, it will be replace to redis
 CH_WORKER_TO_BRAIN = ""
@@ -57,29 +57,56 @@ async def run(loop):
 
     await nc.connect(io_loop=loop)
 
-    async def worker_handler(msg):
-        subject = msg.subject
-        reply = msg.reply
-        data = msg.data.decode()
-        print("Received a event on '{subject} {reply}': {data}".format(subject=subject, reply=reply, data=data))
+    async def private_worker_handler(recv):
+        ch = recv.subject
+        reply = recv.reply
+        msg = recv.data.decode()
+        # TODO: what if json cannot loads?
+        msg = json.loads(msg.replace("'", '"'))
+        # TODO: check the receive msg
+        # and change the status of the worker
+        verb = msg["verb"]
+        context = msg["context"]
 
-    async def hshake_handler(msg):
-        subject = msg.subject
-        reply = msg.reply
-        data = msg.data.decode()
-        hshake_req = json.loads(data.replace("'", '"'))
-        print("Received a hshake on '{subject} {reply}': {data}".format(subject=subject, reply=reply, data=hshake_req))
-        print("start to handshake-back")
+        print("Received in private_brain_handler() '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
+        if verb == "hshake-3":
+            # TODO: update the status of the worker
+            print("finish handshake!!")
+
+    async def public_brain_handler(recv):
+        ch = recv.subject
+        reply = recv.reply
+        msg = recv.data.decode()
+        # TODO: what if json cannot loads?
+        msg = json.loads(msg.replace("'", '"'))
+        # TODO: check the receive msg
+        # and change the status of the worker
         
-        CH_WORKER_TO_BRAIN = hshake_req["context"]["ch_to_brain"]
-        CH_BRAIN_TO_WORKER = hshake_req["context"]["ch_to_worker"]
+        verb = msg["verb"]
+        context = msg["context"]
 
-        await nc.publish(CH_BRAIN_TO_WORKER, b"I am brain")
-        await nc.subscribe(CH_WORKER_TO_BRAIN, cb=worker_handler)
+        print("Received in public_brain_handler() '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
+        
+        if verb == "hshake-1":
+            print("start to handshake-back")
+         
+            # TODO: check if context has the keys "ch_to..."
+            CH_WORKER_TO_BRAIN = context["ch_to_brain"]
+            CH_BRAIN_TO_WORKER = context["ch_to_worker"]
 
+            hshake_reply = {
+                "verb": "hshake-2",
+                "context": {
+                        "workerID": context["workerID"]
+                    }
+                }
+            await nc.publish(CH_BRAIN_TO_WORKER, str(hshake_reply).encode())
+            # TODO: check the channel have been subscribed or not?
+            # should not be double subscribed
+            await nc.subscribe(CH_WORKER_TO_BRAIN, cb=private_worker_handler)
     # await nc.subscribe(CHANNEL_NAME, cb=api_handler)
     await nc.subscribe(CH_HEARTBEAT, cb=hb_handler)
-    await nc.subscribe(CH_WORKER, cb=hshake_handler)
+    await nc.subscribe(CH_PUBLIC_BRAIN, cb=public_brain_handler)
 
 
 if __name__ == '__main__':
