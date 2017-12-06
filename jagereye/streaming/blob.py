@@ -41,9 +41,9 @@ class Blob(object):
             raise TypeError('Tensor name must be a string.')
         if not isinstance(tensor, np.ndarray):
             raise TypeError('Only numpy ndarray is supported for feeding.')
-        if tensor.dtype.kind not in 'biufS':
-            raise TypeError('Only float-like types (bool, int, unsigned '
-                            'int and float) are supported for tensor.')
+        if tensor.dtype.kind not in 'biufU':
+            raise TypeError('Only float-like types (bool, int, unsigned int and'
+                            ' float) or string are supported for tensor.')
 
         self._data[name] = tensor
 

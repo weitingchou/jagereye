@@ -5,7 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import threading
-import Queue
+from queue import Queue
 import time
 
 from jagereye.streaming.capturers.base import ICapturer
@@ -196,7 +196,7 @@ class Pipeline(object):
         self._prepare()
 
         # Create threads for pipeline execution.
-        queue = Queue.Queue()
+        queue = Queue()
         self._stop_event = threading.Event()
         rec_args = (self._capturer, self._cap_interval, queue,
                     self._stop_event,)

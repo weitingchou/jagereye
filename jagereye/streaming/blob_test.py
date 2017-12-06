@@ -28,7 +28,7 @@ class TestBlob(object):
     def test_feed_non_supported_ndarray(self):
         blob = Blob()
         for dtype in [np.complex64, np.complex128, np.complex256,
-                      np.object, np.unicode, np.void]:
+                      np.object, np.void]:
             tensor = np.array([]).astype(dtype)
             with pytest.raises(TypeError):
                 blob.feed('non_float_like_ndarray', tensor)
@@ -45,9 +45,10 @@ class TestBlob(object):
 
     def test_feed_string_ndarray(self):
         blob = Blob()
-        tensor = np.array(['i love jagereye', 'hello']).astype(np.str)
-        np.testing.assert_equal(tensor,
-                                blob.feed('string_ndarray', tensor))
+        for dtype in [np.str, np.unicode]:
+            tensor = np.array(['i love jagereye', 'hello']).astype(dtype)
+            np.testing.assert_equal(tensor,
+                                    blob.feed('string_ndarray', tensor))
 
     def test_has_with_non_string_name(self):
         blob = create_blob()
