@@ -1,0 +1,7 @@
+{
+    "ch_api_brain": {
+        "REQ_APPLICATION_STATUS": "request application status",
+        "START_APPLICATION": "start application",
+        "STOP_APPLICATION": "stop application"
+    }
+}

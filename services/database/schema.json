@@ -1,0 +1,28 @@
+{
+    "cameras": {
+        "device_name": {
+            "type": "String",
+            "required": true
+        },
+        "streaming_protocol": {
+            "type": "String",
+            "default": "rtsp"
+        },
+        "host": {
+            "type": "String",
+            "required": true
+        },
+        "port": {
+            "type": "Number",
+            "required": true
+        },
+        "path": {
+            "type": "String",
+            "default": "/"
+        },
+        "enabled": {
+            "type": "Boolean",
+            "default": false
+        }
+    }
+}

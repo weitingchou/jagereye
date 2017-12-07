@@ -1,0 +1,22 @@
+{
+  "name": "jagereye",
+  "private": true,
+  "version": "0.0.1",
+  "description": "",
+  "main": "",
+  "scripts": {
+  },
+  "repository": "",
+  "keywords": [],
+  "author": "Wei-Ting Chou",
+  "devDependencies": {
+  },
+  "dependencies": {
+      "express": "4.16.1",
+      "body-parser": "1.18.2",
+      "http-errors": "1.6.2",
+      "bluebird": "3.5.0",
+      "nats": "0.7.24",
+      "mongoose": "4.13.6"
+  }
+}
