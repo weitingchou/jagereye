@@ -21,6 +21,71 @@ class _ModeEnum(object):
 _MODE = _ModeEnum()
 
 
+class MotionDetectionModule(IModule):
+    # TODO(JiaKuan Su): Please fill the detailed docstring.
+    """The module for motion detection."""
+
+    def __init__(self, sensitivity=80):
+        """Create a new `MotionDetectionModule`
+
+        Args:
+          sensitivity (int): The sensitivity of motion detection, range from 1
+            to 100. Defaults to 80.
+        """
+        sensitivity_clamp = max(1, min(sensitivity, 100))
+        self._threshold = (100 - sensitivity_clamp) * 0.05
+        self._last_gray_image = None
+
+    def prepare(self):
+        """The routine of module preparation."""
+        pass
+
+    def execute(self, blobs):
+        # TODO(JiaKuan Su): Please fill the detailed docstring.
+        """The routine of motion detection module execution.
+
+        Raises:
+            RuntimeError: If the input tensor is not 3-dimensional.
+        """
+        # TODO(JiaKuan Su): Currently, I only handle the case for batch_size=1,
+        # please help complete the case for batch_size>1.
+        blob = blobs[0]
+        image = blob.fetch('image')
+        if image.ndim != 3:
+            raise RuntimeError('The input "image" tensor is not 3-dimensional.')
+
+        cur_gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        moved = False
+
+        if not self._last_gray_image is None:
+            # Get the difference of two grayscale images.
+            res = cv2.absdiff(self._last_gray_image, cur_gray_image)
+            # Remove the noise and do the threshold.
+            res = cv2.blur(res, (5, 5))
+            res = cv2.morphologyEx(res, cv2.MORPH_OPEN, None)
+            res = cv2.morphologyEx(res, cv2.MORPH_CLOSE, None)
+            ret, res = cv2.threshold(res, 10, 255, cv2.THRESH_BINARY_INV) #pylint: disable=unused-variable
+            # Count the number of black pixels.
+            num_black = np.count_nonzero(res == 0)
+            # Calculate the image size.
+            im_size = image.shape[1] * image.shape[0]
+            # Calculate the average of black pixel in the image.
+            avg_black = (num_black * 100.0) / im_size
+            # Detect moving by testing whether the average of black exceeds the
+            # threshold or not.
+            moved = avg_black >= self._threshold
+            blob.feed('res', res)
+
+        self._last_gray_image = cur_gray_image
+        blob.feed('moved', np.array(moved))
+
+        return blobs
+
+    def destroy(self):
+        """The routine of module destruction."""
+        pass
+
+
 class ObjectDetectionModule(IModule):
     # TODO(JiaKuan Su): Please fill the detailed docstring.
     """The module for object detection."""
@@ -74,17 +139,25 @@ class ObjectDetectionModule(IModule):
             if image.ndim != 3:
                 raise RuntimeError('The input "image" tensor is not '
                                    '3-dimensional.')
-            # Expand dimensions since the model expects images to have shape:
-            # [1, None, None, 3]
-            image_expanded = np.expand_dims(image, axis=0)
-            # Actual detection.
-            fetches = [detection_boxes,
-                       detection_scores,
-                       detection_classes,
-                       num_detections]
-            feed_dict = {image_tensor: image_expanded}
-            (boxes, scores, classes, num) = \
-                self._sess.run(fetches, feed_dict=feed_dict)
+            moved = bool(blob.fetch('moved'))
+
+            if not moved:
+                boxes = np.array([[]])
+                scores = np.array([[]])
+                classes = np.array([[]])
+                num = np.array([0.0])
+            else:
+                # Expand dimensions since the model expects images to have
+                # shape: [1, None, None, 3]
+                image_expanded = np.expand_dims(image, axis=0)
+                # Actual detection.
+                fetches = [detection_boxes,
+                           detection_scores,
+                           detection_classes,
+                           num_detections]
+                feed_dict = {image_tensor: image_expanded}
+                (boxes, scores, classes, num) = \
+                    self._sess.run(fetches, feed_dict=feed_dict)
             blob.feed('detection_boxes', boxes)
             blob.feed('detection_scores', scores)
             blob.feed('detection_classes', classes)

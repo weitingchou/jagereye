@@ -9,6 +9,7 @@ from jagereye.worker import Worker
 
 from modules import DrawTripwireModule
 from modules import InRegionDetectionModule
+from modules import MotionDetectionModule
 from modules import ObjectDetectionModule
 from modules import OutputModule
 from modules import TripwireModeModule
@@ -52,6 +53,7 @@ def normalize_color(color):
 
 
 def worker_fn():
+    """The main worker function"""
     task_info = {
         # 'src': 'rtsp://192.168.0.3/stream1',
         'src': '/home/feabrbries/ml_related/dataset/tripwire/motocycle.mp4',
@@ -70,6 +72,7 @@ def worker_fn():
     pipeline = Pipeline(cap_interval=cap_interval)
 
     pipeline.source(VideoStreamCapturer(src)) \
+            .pipe(MotionDetectionModule()) \
             .pipe(ObjectDetectionModule(ckpt_path)) \
             .pipe(InRegionDetectionModule(category_index,
                                           region,
@@ -90,7 +93,6 @@ def worker_fn():
 
 def main():
     worker = Worker("nats://localhost:4222")
-    alert = worker.alert_to_brain
 
     worker.register_pipeline(worker_fn)
 
