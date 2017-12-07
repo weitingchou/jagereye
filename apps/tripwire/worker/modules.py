@@ -285,6 +285,8 @@ def _record_video(file_name, fps, video_size, queue, codec='MJPG'):
       queue (`queue.Queue`): The task queue.
       coded (string): The codec of recorded video. Defaults to 'MJPG'.
     """
+    logging.info('Start recording {}'.format(file_name))
+
     # TODO(JiaKuan Su): MJPEG is heavy, please use another codec, such as h264.
     if cv2.__version__.startswith('2.'):
         # OpenCV 2.X
@@ -303,6 +305,7 @@ def _record_video(file_name, fps, video_size, queue, codec='MJPG'):
             break
 
     video_writer.release()
+    logging.info('End recording {}'.format(file_name))
 
 
 class VideoRecordModule(IModule):
@@ -322,8 +325,7 @@ class VideoRecordModule(IModule):
         self._fps = fps
         self._image_name = image_name
         self._reserved_images = []
-        self._file_name = None
-        self._video_writer = None
+        self._video_recorder = None
         self._queue = None
 
     def prepare(self):
@@ -355,10 +357,10 @@ class VideoRecordModule(IModule):
         # Handle alert mode.
         if mode == _MODE.ALERT_START:
             # TODO(JiaKuan Su): Browser can't play avi files, use mp4 instead.
-            self._file_name = '{}.avi'.format(timestamp)
+            file_name = '{}.avi'.format(timestamp)
             video_size = (im_width, im_height)
-            self._queue = queue.Queue()
-            args = (self._file_name, self._fps, video_size, self._queue,)
+            self._queue = Queue()
+            args = (file_name, self._fps, video_size, self._queue,)
             self._video_recorder = threading.Thread(target=_record_video,
                                                     args=args)
             self._video_recorder.setDaemon(True)
@@ -368,7 +370,6 @@ class VideoRecordModule(IModule):
                     'command': 'RECORD',
                     'image': reserved_image
                 })
-            logging.info('Start recording {}'.format(self._file_name))
         elif mode == _MODE.ALERTING:
             self._queue.put({
                 'command': 'RECORD',
@@ -378,9 +379,7 @@ class VideoRecordModule(IModule):
             self._queue.put({
                 'command': 'END'
             })
-            logging.info('End recording {}'.format(self._file_name))
-            self._file_name = None
-            self._video_writer = None
+            self._video_recorder = None
             self._queue = None
 
         return blobs
