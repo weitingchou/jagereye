@@ -120,3 +120,6 @@ tags
 
 # Generated documentation
 docs_output
+
+# npm
+node_modules
