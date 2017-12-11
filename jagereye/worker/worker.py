@@ -13,14 +13,14 @@ import threading
 CH_BRAIN = "ch_brain"
 
 class Worker(object):
-    def __init__(self, mq_host):
+    def __init__(self, worker_id, mq_host='nats://localhost:4222'):
         self._main_loop = asyncio.get_event_loop()
         
         # TODO: check NATS is connected to server, error handler
         # connect NATs server, default is nats://localhost:4222
         # TODO: check mq_host is valid
         self._nats_cli = NATS()
-        self._worker_id = self._gen_worker_id()
+        self._worker_id = worker_id
         self._ch_worker_to_brain = self._gen_ch_WtoB() 
         self._ch_brain_to_worker = self._gen_ch_BtoW()
         self.pipeline = None
@@ -117,9 +117,6 @@ class Worker(object):
 
     def _gen_ch_BtoW(self):
         return "ch_brain_"+str(self._worker_id)
-
-    def _gen_worker_id(self):
-        return "worker_9527"
 
     def start(self):
         self._main_loop.run_until_complete(self._setup())

@@ -1,7 +1,9 @@
 """The tripwire worker."""
 
 import os
+import sys
 
+from jagereye.util import logging
 from jagereye.streaming import VideoStreamCapturer
 from jagereye.streaming import DisplayModule
 from jagereye.streaming import Pipeline
@@ -91,8 +93,8 @@ def worker_fn():
     pipeline.await_termination()
 
 
-def main():
-    worker = Worker("nats://localhost:4222")
+def main(worker_id):
+    worker = Worker(worker_id)
 
     worker.register_pipeline(worker_fn)
 
@@ -100,4 +102,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) < 2:
+        logging.error('Usage: python {} worker_id'.format(sys.argv[0]))
+        sys.exit(-1)
+
+    worker_id = sys.argv[1]
+
+    main(worker_id)
