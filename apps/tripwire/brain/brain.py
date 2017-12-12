@@ -35,19 +35,30 @@ async def run(loop, mq_host='nats://localhost:4222'):
         ch = recv.subject
         reply = recv.reply
         msg = recv.data.decode()
-        # TODO: what if json cannot loads?
+        # TODO(Ray): what if json cannot loads?
         msg = json.loads(msg.replace("'", '"'))
-        # TODO: check the receive msg
+        # TODO(Ray): check the receive msg
         # and change the status of the worker
         verb = msg["verb"]
         context = msg["context"]
 
         logging.debug("Received in private_brain_handler(): '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
         if verb == "hshake-3":
-            # TODO: update the status of the worker
-            logging.debug("finish handshake!!")
+            logging.debug("finish handshake")
+            # TODO(Ray): change worker status in DB
+            # assign job to worker
+            assign_req = {
+                "verb": "assign",
+                "context": {
+                        "workerID": context["workerID"]
+                    }
+                }
+
+            # TODO(Ray): channel need to be get by search DB with workerID
+            await nc.publish("ch_brain_"+context["workerID"], str(assign_req).encode())
+
         if verb == "hbeat":
-            logging.debug("hbeat!!: "+str(msg))
+            logging.debug("hbeat: "+str(msg))
 
     async def public_brain_handler(recv):
         ch = recv.subject
@@ -77,7 +88,7 @@ async def run(loop, mq_host='nats://localhost:4222'):
                     }
                 }
             await nc.publish(CH_BRAIN_TO_WORKER, str(hshake_reply).encode())
-            # TODO: check the channel have been subscribed or not?
+            # TODO(Ray): check the channel have been subscribed or not?
             # should not be double subscribed
             await nc.subscribe(CH_WORKER_TO_BRAIN, cb=private_worker_handler)
 
