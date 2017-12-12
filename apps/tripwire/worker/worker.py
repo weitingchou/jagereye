@@ -55,6 +55,7 @@ def normalize_color(color):
 
 
 def worker_fn():
+    logging.debug("running worker_fn()")
     """The main worker function"""
     task_info = {
         # 'src': 'rtsp://192.168.0.3/stream1',

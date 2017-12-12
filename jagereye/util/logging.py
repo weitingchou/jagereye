@@ -12,7 +12,7 @@ from logging import INFO # pylint: disable=unused-import
 from logging import WARN # pylint: disable=unused-import
 
 
-_logging.basicConfig(level=_logging.INFO)
+_logging.basicConfig(level=_logging.DEBUG)
 _logger = _logging.getLogger('jagereye')
 
 
