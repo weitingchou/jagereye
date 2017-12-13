@@ -4,7 +4,7 @@ const models = require('./database')
 const NATS = require('nats')
 const fs = require('fs')
 
-messaging = JSON.parse(fs.readFileSync('../messaging.json', 'utf8'))
+const messaging = JSON.parse(fs.readFileSync('../messaging.json', 'utf8'))
 
 
 function createError(status, message, origErrObj) {
