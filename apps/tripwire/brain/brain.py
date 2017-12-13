@@ -25,10 +25,20 @@ CH_RES_TO_BRAIN = "ch_res_brain"
 pending_jobs = {}
 
 
+def msg_to_json(msg):
+    """convert msg received from nats into json
+
+    """
+    # TODO(Ray): what if cannot decode()?
+    msg = msg.decode()
+    # TODO(Ray): what if json cannot loads?
+    return json.loads(msg.replace("'", '"'))
+    # TODO(Ray): check the receive msg
+
 class Brain(object):
     """Brain the base class for brain service.
 
-    It provides basic interations to api-server, workers, resource-mgr.
+    It provides basic interactions to api-server, workers, resource-mgr.
     Like handshake to workers.
 
     Attributes:
@@ -72,10 +82,8 @@ class Brain(object):
         """
         ch = recv.subject
         reply = recv.reply
-        msg = recv.data.decode()
-        # TODO(Ray): what if json cannot loads?
-        msg = json.loads(msg.replace("'", '"'))
-        # TODO(Ray): check the receive msg
+        msg = msg_to_json(recv.data)
+
         # and change the status of the worker
         verb = msg["verb"]
         context = msg["context"]
@@ -90,12 +98,12 @@ class Brain(object):
             assign_req = {
                 "verb": "assign",
                 "context": {
-                        "workerID": context["workerID"]
-                    }
+                    "workerID": context["workerID"]
                 }
+            }
             # TODO(Ray): channel need to be get by search DB with workerID
             await self._nats_cli.publish("ch_brain_"+context["workerID"], str(assign_req).encode())
-        if verb == "hbeat":
+        elif verb == "hbeat":
             # TODO: need to update to DB
             logging.debug("hbeat: "+str(msg))
 
@@ -114,10 +122,8 @@ class Brain(object):
 
         ch = recv.subject
         reply = recv.reply
-        msg = recv.data.decode()
-        # TODO: what if json cannot loads?
-        msg = json.loads(msg.replace("'", '"'))
-        # TODO: check the receive msg
+        msg = msg_to_json(recv.data)
+        # TODO(Ray): check the receive msg
         # and change the status of the worker
 
         verb = msg["verb"]
@@ -134,9 +140,9 @@ class Brain(object):
             hshake_reply = {
                 "verb": "hshake-2",
                 "context": {
-                        "workerID": context["workerID"]
-                    }
+                    "workerID": context["workerID"]
                 }
+            }
             # TODO: the channel name should be modified
             await self._nats_cli.publish(CH_BRAIN_TO_WORKER, str(hshake_reply).encode())
             # TODO(Ray): check the channel have been subscribed or not?
@@ -154,9 +160,7 @@ class Brain(object):
         """
         ch = recv.subject
         reply = recv.reply
-        msg = recv.data.decode()
-        # TODO: what if json cannot loads?
-        msg = json.loads(msg.replace("'", '"'))
+        msg = msg_to_json(recv.data)
 
         logging.debug("Received in api_handler() '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
 
@@ -195,9 +199,7 @@ class Brain(object):
                 reply (str): the reply channel name
                 mst (msg): message
         """
-        msg = recv.data.decode()
-        msg = json.loads(msg.replace("'", '"'))
-
+        msg = msg_to_json(recv.data)
         if msg['command'] == MESSAGES['ch_brain_res']['CREATE_WORKER']:
             worker_id = msg['response']['workerId']
             job = pending_jobs[msg['response']['ticketId']]
