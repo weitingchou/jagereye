@@ -2,11 +2,9 @@ import asyncio
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 import json
+
 from jagereye.util import logging
 
-import ast
-
-import time
 
 # Loading messaging
 with open('../../../services/messaging.json', 'r') as f:
@@ -27,11 +25,51 @@ CH_RES_TO_BRAIN = "ch_res_brain"
 pending_jobs = {}
 
 
-async def run(loop, mq_host='nats://localhost:4222'):
-    nc = NATS()
-    await nc.connect(io_loop=loop, servers=[mq_host])
+class Brain(object):
+    """Brain the base class for brain service.
 
-    async def private_worker_handler(recv):
+    It provides basic interations to api-server, workers, resource-mgr.
+    Like handshake to workers.
+
+    Attributes:
+
+    """
+    def __init__(self, ch_public="public_brain", mq_host='nats://localhost:4222'):
+        """initial the brain service
+
+        Args:
+            ch_public (str): the public nats channel for listening all workers
+            mq_host (str): the host and port of nats server
+        """
+        self._main_loop = asyncio.get_event_loop()
+        # TODO(Ray): check NATS is connected to server, error handler
+        # TODO(Ray): check mq_host is valid
+        self._nats_cli = NATS()
+        self._ch_public = ch_public
+        self._redis_cli = None
+        self._mq_host = mq_host
+
+    async def _setup(self):
+        """register all handler
+
+        """
+        await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
+        await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
+        await self._nats_cli.subscribe(CH_PUBLIC_BRAIN, cb=self._public_brain_handler)
+        await self._nats_cli.subscribe(CH_RES_TO_BRAIN, cb=self._res_handler)
+
+    async def _private_worker_handler(self, recv):
+        """asychronous handler for private channel with each workers
+
+        listen to the private channel with each workers,
+        and interact depends on the received msg
+
+        Args:
+            recv (:obj:`str`): include 'subject', 'reply', 'msg'
+                subject (str): the src channel name
+                reply (str): the reply channel name
+                mst (msg): message
+        """
         ch = recv.subject
         reply = recv.reply
         msg = recv.data.decode()
@@ -42,8 +80,10 @@ async def run(loop, mq_host='nats://localhost:4222'):
         verb = msg["verb"]
         context = msg["context"]
 
-        logging.debug("Received in private_brain_handler(): '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
         if verb == "hshake-3":
+            logging.debug("Received 'hshake-3' in private_brain_handler(): '{subject} {reply}': {data}".\
+                format(subject=ch, reply=reply, data=msg))
+
             logging.debug("finish handshake")
             # TODO(Ray): change worker status in DB
             # assign job to worker
@@ -53,14 +93,25 @@ async def run(loop, mq_host='nats://localhost:4222'):
                         "workerID": context["workerID"]
                     }
                 }
-
             # TODO(Ray): channel need to be get by search DB with workerID
-            await nc.publish("ch_brain_"+context["workerID"], str(assign_req).encode())
-
+            await self._nats_cli.publish("ch_brain_"+context["workerID"], str(assign_req).encode())
         if verb == "hbeat":
+            # TODO: need to update to DB
             logging.debug("hbeat: "+str(msg))
 
-    async def public_brain_handler(recv):
+    async def _public_brain_handler(self, recv):
+        """asychronous handler for public channel all initial workers
+
+        listen to the public channel,
+        which is for a worker registers to brain when the worker initializing
+
+        Args:
+            recv (:obj:`str`): include 'subject', 'reply', 'msg'
+                subject (str): the src channel name
+                reply (str): the reply channel name
+                mst (msg): message
+        """
+
         ch = recv.subject
         reply = recv.reply
         msg = recv.data.decode()
@@ -72,12 +123,11 @@ async def run(loop, mq_host='nats://localhost:4222'):
         verb = msg["verb"]
         context = msg["context"]
 
-        logging.debug("Received in public_brain_handler(): '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
-
         if verb == "hshake-1":
-            logging.debug("start to handshake-back")
-
+            logging.debug("Received 'hshake-1' msg in _public_brain_handler(): '{subject} {reply}': {data}".\
+                    format(subject=ch, reply=reply, data=msg))
             # TODO: check if context has the keys "ch_to..."
+            # TODO: update new worker to RedisDB
             CH_WORKER_TO_BRAIN = context["ch_to_brain"]
             CH_BRAIN_TO_WORKER = context["ch_to_worker"]
 
@@ -87,12 +137,21 @@ async def run(loop, mq_host='nats://localhost:4222'):
                         "workerID": context["workerID"]
                     }
                 }
-            await nc.publish(CH_BRAIN_TO_WORKER, str(hshake_reply).encode())
+            # TODO: the channel name should be modified
+            await self._nats_cli.publish(CH_BRAIN_TO_WORKER, str(hshake_reply).encode())
             # TODO(Ray): check the channel have been subscribed or not?
             # should not be double subscribed
-            await nc.subscribe(CH_WORKER_TO_BRAIN, cb=private_worker_handler)
+            await self._nats_cli.subscribe(CH_WORKER_TO_BRAIN, cb=self._private_worker_handler)
 
-    async def api_handler(recv):
+    async def _api_handler(self, recv):
+        """asychronous handler for listen cmd from api server
+
+        Args:
+            recv (:obj:`str`): include 'subject', 'reply', 'msg'
+                subject (str): the src channel name
+                reply (str): the reply channel name
+                mst (msg): message
+        """
         ch = recv.subject
         reply = recv.reply
         msg = recv.data.decode()
@@ -103,7 +162,7 @@ async def run(loop, mq_host='nats://localhost:4222'):
 
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_APPLICATION_STATUS']:
             # TODO: Return application status
-            await nc.publish(reply, str("It is running").encode())
+            await self._nats_cli.publish(reply, str("It is running").encode())
         elif msg['command'] == MESSAGES['ch_api_brain']['START_APPLICATION']:
             job = {
                 'id': msg['params']['camera']['id'],
@@ -120,14 +179,22 @@ async def run(loop, mq_host='nats://localhost:4222'):
                 }
             }
             pending_jobs[job['id']] = job
-            await nc.publish(CH_BRAIN_TO_RES, str(request).encode())
+            await self._nats_cli.publish(CH_BRAIN_TO_RES, str(request).encode())
         elif msg['command'] == MESSAGES['ch_api_brain']['STOP_APPLICATION']:
             # TODO: Stop application
-            await nc.publish(reply, str("It is stoping").encode())
+            await self._nats_cli.publish(reply, str("It is stoping").encode())
         else:
             logging.error("Undefined command: {}".format(msg['command']))
 
-    async def res_handler(recv):
+    async def _res_handler(self, recv):
+        """asychronous handler for listen response from resource manager
+
+        Args:
+            recv (:obj:`str`): include 'subject', 'reply', 'msg'
+                subject (str): the src channel name
+                reply (str): the reply channel name
+                mst (msg): message
+        """
         msg = recv.data.decode()
         msg = json.loads(msg.replace("'", '"'))
 
@@ -136,15 +203,13 @@ async def run(loop, mq_host='nats://localhost:4222'):
             job = pending_jobs[msg['response']['ticketId']]
             del pending_jobs[msg['response']['ticketId']]
             logging.info('Creating worker, ID = {}'.format(worker_id))
-            await nc.publish(job['reply'], str("OK").encode())
+            await self._nats_cli.publish(job['reply'], str("OK").encode())
 
-    await nc.subscribe(CH_API_TO_BRAIN, cb=api_handler)
-    await nc.subscribe(CH_PUBLIC_BRAIN, cb=public_brain_handler)
-    await nc.subscribe(CH_RES_TO_BRAIN, cb=res_handler)
-
+    def start(self):
+        self._main_loop.run_until_complete(self._setup())
+        self._main_loop.run_forever()
+        self._main_loop.close()
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run(loop, mq_host='nats://192.168.1.2:4222'))
-    loop.run_forever()
-    loop.close()
+    brain = Brain()
+    brain.start()
