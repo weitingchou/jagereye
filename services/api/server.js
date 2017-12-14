@@ -1,12 +1,17 @@
 const http = require('http')
 const NATS = require('nats')
+
 const app = require('./app')
+const notification = require('./notification')
 
 
 // Initialize NATS
+// const natsServers = ['nats://192.168.1.2:4222']
+const natsServers = ['nats://localhost:4222']
 global.nats = NATS.connect({
     'maxReconnectAttempts': -1,
-    'reconnectTimeWait': 250
+    'reconnectTimeWait': 250,
+    'servers': natsServers
 })
 nats.on('error', (err) => {
     console.error(err)
@@ -24,10 +29,13 @@ nats.on('close', () => {
     console.log('connection closed')
 })
 
-const server = http.createServer(app)
+const httpServer = http.createServer(app)
+
+notification.init(httpServer, {})
+notification.start()
 
 const port = 5000
-server.listen(port, (error) => {
+httpServer.listen(port, (error) => {
     if (error) {
         console.error(error)
     } else {
