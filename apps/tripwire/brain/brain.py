@@ -34,10 +34,10 @@ def binary_to_json(binary_str):
     """convert binary string into json object
 
     Args:
-        binary_str: binary string
+        binary_str: binary string which is expected in the format of json
 
     Returns:
-        json object
+        dict object
     """
 
     # TODO(Ray): what if cannot decode()?
@@ -52,7 +52,7 @@ def gen_ticket_id(analyzer_id):
     Returns:
         string: The unique worker ID.
     """
-    return 'ticket:' + analyzer_id + ':' + '{}'.format(uuid.uuid4())
+    return 'ticket:{}:{}'.format(analyzer_id, uuid.uuid4())
 
 class Brain(object):
     """Brain the base class for brain service.
@@ -63,9 +63,9 @@ class Brain(object):
     Attributes:
 
     """
-    def __init__(self, ch_public="public_brain",
+    def __init__(self, ch_public='public_brain',
                 mq_host='nats://localhost:4222',
-                memDB_host='redis://localhost:6379'):
+                mem_db_host='redis://localhost:6379'):
 
         """initial the brain service
 
@@ -79,15 +79,15 @@ class Brain(object):
         # TODO(Ray): _nats_cli should be abstracted as _mq_cli
         self._nats_cli = NATS()
         self._ch_public = ch_public
-        self._memDB_cli = None
+        self._mem_db_cli = None
         self._mq_host = mq_host
-        self._memDB_host = memDB_host
+        self._mem_db_host = mem_db_host
 
     async def _setup(self):
         """register all handler
 
         """
-        self._memDB_cli = await aioredis.create_redis(self._memDB_host, loop=self._main_loop)
+        self._mem_db_cli = await aioredis.create_redis(self._mem_db_host, loop=self._main_loop)
 
         await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
         await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
@@ -115,10 +115,10 @@ class Brain(object):
         context = msg['context']
 
         if verb == 'hshake-3':
-            logging.debug("Received 'hshake-3' in private_brain_handler(): '{subject} {reply}': {data}".\
+            logging.debug('Received "hshake-3" in private_brain_handler(): "{subject} {reply}": {data}'.\
                 format(subject=ch, reply=reply, data=msg))
 
-            logging.debug("finish handshake")
+            logging.debug('finish handshake')
             # TODO(Ray): change worker status in DB
             # assign job to worker
             assign_req = {
@@ -131,7 +131,7 @@ class Brain(object):
             await self._nats_cli.publish('ch_brain_'+context['workerID'], str(assign_req).encode())
         elif verb == 'hbeat':
             # TODO: need to update to DB
-            logging.debug("hbeat: "+str(msg))
+            logging.debug('hbeat: {}'.format(str(msg)))
 
     async def _public_brain_handler(self, recv):
         """asychronous handler for public channel all initial workers
@@ -156,7 +156,7 @@ class Brain(object):
         context = msg['context']
 
         if verb == 'hshake-1':
-            logging.debug("Received 'hshake-1' msg in _public_brain_handler(): '{subject} {reply}': {data}".\
+            logging.debug('Received "hshake-1" msg in _public_brain_handler(): "{subject} {reply}": {data}'.\
                     format(subject=ch, reply=reply, data=msg))
             # TODO: check if context has the keys "ch_to..."
             # TODO: update new worker to RedisDB
@@ -188,7 +188,8 @@ class Brain(object):
         reply = recv.reply
         msg = binary_to_json(recv.data)
 
-        logging.debug("Received in api_handler() '{subject} {reply}': {data}".format(subject=ch, reply=reply, data=msg))
+        logging.debug('Received in api_handler() "{subject} {reply}": {data}'.\
+                 format(subject=ch, reply=reply, data=msg))
 
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_APPLICATION_STATUS']:
             # TODO: Return application status
@@ -204,34 +205,34 @@ class Brain(object):
             # check if there is a ticket for analyzer?
             # if yes, reject the request from api
             # it no, continue
-            ticket_res = await self._memDB_cli.keys('ticket:' + analyzer_id + ':*')
+            ticket_res = await self._mem_db_cli.keys('ticket:{}:*'.format(analyzer_id))
             if ticket_res:
                 # TODO(Ray): if yes, reject the request from api
-                logging.debug("if ticket exists, reject the request from api")
+                logging.debug('if ticket exists, reject the request from api')
             else:
                 # it no ticket for the analyzer
 
                 # check the worker for the analyzer exists?
                 # if yes, just re-config worker
                 # if no, request resource manager for launching a worker
-                worker_res = await self._memDB_cli.keys('anal_worker:' + analyzer_id + ':*')
+                worker_res = await self._mem_db_cli.keys('anal_worker:{}:*'.format(analyzer_id))
                 if worker_res:
                     # TODO(Ray): if yes, just re-config worker
-                    logging.debug("if worker exists, just re-config worker")
+                    logging.debug('if worker exists, just re-config worker')
                 else:
                     # if no worker, request resource manager for launching a worker
 
                     # create a worker record & a ticket in memDB
                     timestamp = round(time.time())
                     ticket_id = gen_ticket_id(analyzer_id)
-                    anal_worker_id = 'anal_worker:' + analyzer_id + ':placeholder'
+                    anal_worker_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
 
                     # TODO: 'apps' need to re-define
                     ticket_obj = {
                         'apps': app,
                         'timestamp': timestamp
                     }
-                    await self._memDB_cli.set( ticket_id , str(ticket_obj))
+                    await self._mem_db_cli.set( ticket_id , str(ticket_obj))
 
                     worker_obj = {
                         'status': WorkerStatus.CREATE.name,
@@ -239,9 +240,10 @@ class Brain(object):
                         'enabled_apps': []
                     }
                     logging.info('Create worker "placeholder" for analyzer "{}"'.format(analyzer_id))
-                    await self._memDB_cli.set(anal_worker_id, str(worker_obj))
+                    await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
 
                     # reply back to api_server
+                    # TODO(Ray): response needs to define
                     await self._nats_cli.publish(reply, "OK".encode())
 
                     # request resource manager for launch a worker
@@ -260,7 +262,7 @@ class Brain(object):
             # TODO: Stop application
             await self._nats_cli.publish(reply, str("It is stoping").encode())
         else:
-            logging.error("Undefined command: {}".format(msg['command']))
+            logging.error('Undefined command: {}'.format(msg['command']))
 
     async def _res_handler(self, recv):
         """asychronous handler for listen response from resource manager
@@ -284,18 +286,18 @@ class Brain(object):
             # update the anal_worker record:
             # retrieve the original anal_worker record
             # TODO(Ray): confirm that the result must have 1 element
-            ori_key = (await self._memDB_cli.keys('anal_worker:' + analyzer_id + ':*'))[0]
-            worker_obj = binary_to_json(await self._memDB_cli.get(ori_key))
-            anal_worker_id = 'anal_worker:' + analyzer_id + ':' +worker_id
+            ori_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
+            worker_obj = binary_to_json(await self._mem_db_cli.get(ori_id))
+            anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
 
             # change status
             worker_obj['status'] = WorkerStatus.INITIAL.name
 
             # append a new anal_worker record with worker_id
-            await self._memDB_cli.set(anal_worker_id, str(worker_obj))
+            await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
 
             # delete the original record
-            await self._memDB_cli.delete(ori_key)
+            await self._mem_db_cli.delete(ori_id)
 
 
     def start(self):
