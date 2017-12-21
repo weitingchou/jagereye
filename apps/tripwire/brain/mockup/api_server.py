@@ -1,6 +1,11 @@
 import asyncio
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
+import json
+
+# Loading messaging
+with open('../../../../services/messaging.json', 'r') as f:
+    MESSAGES = json.loads(f.read())
 
 CH_API_TO_BRAIN = "ch_api_brain"
 
@@ -19,11 +24,22 @@ async def run(loop):
     #sid = yield from nc.subscribe(CHANNEL_NAME, cb=message_handler)
 
     request =   { 
-            "action": "start",
-            "name": "Tripwire",
+            "command": MESSAGES['ch_api_brain']['START_APPLICATION'],
             "params": {
-                "bb": [],
-                "triggers": ["person", "car"]
+                "camera": {
+                    "id": "cam124",
+                    "protocol": "rtsp",
+                    "host": "rtsp://cam123",
+                    "port": "123",
+                    "path": "stream1"
+                    },
+                "application": {
+                    "name": "tripwire",
+                    "params": {
+                        "region": [],
+                        "triggers": []
+                        }
+                    }
                 }
             }
 
