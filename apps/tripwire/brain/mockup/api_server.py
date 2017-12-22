@@ -2,6 +2,7 @@ import asyncio
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 import json
+import random
 
 # Loading messaging
 with open('../../../../services/messaging.json', 'r') as f:
@@ -22,12 +23,13 @@ async def run(loop):
     
     # Simple publisher and async subscriber via coroutine.
     #sid = yield from nc.subscribe(CHANNEL_NAME, cb=message_handler)
+    anal_id = 'cam{}'.format(str(random.randint(0, 10000)))
 
     request =   { 
             "command": MESSAGES['ch_api_brain']['START_APPLICATION'],
             "params": {
                 "camera": {
-                    "id": "cam124",
+                    "id": anal_id,
                     "protocol": "rtsp",
                     "host": "rtsp://cam123",
                     "port": "123",
