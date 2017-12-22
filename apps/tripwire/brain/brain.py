@@ -143,6 +143,9 @@ class Brain(object):
                             'verb': 'config',
                             'context': context
                         }
+                        # update worker status to CONFIG
+                        worker_obj['status'] = WorkerStatus.CONFIG.name
+                        await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
                         await self._nats_cli.publish(context['ch_to_worker'], str(config_req).encode())
                     else:
                         # no ticket for the analyzer
@@ -151,7 +154,23 @@ class Brain(object):
                 else:
                     logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
                             format(get_func_name(), worker_obj['status']))
-
+            elif verb == 'config_ok':
+                logging.debug('Received "config_ok" in {func}: "{subject} {reply}": {data}'.\
+                    format(func=get_func_name(), subject=ch, reply=reply, data=msg))
+                anal_worker_id = context['anal_worker_id']
+                ticket_id = context['ticket']['ticket_id']
+                worker_obj = binary_to_json(await self._mem_db_cli.get(anal_worker_id))
+                # check if  worker status is 'CONFIG'
+                if worker_obj['status'] == WorkerStatus.CONFIG.name:
+                    worker_obj['status'] = WorkerStatus.RUNNING.name
+                    # update the status to RUNNING
+                    await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
+                    # delete ticket
+                    await self._mem_db_cli.delete(ticket_id)
+                else:
+                    # TODO(Ray): when status not correct, what to do?
+                    logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
+                            format(get_func_name, worker_obj['status']))
             elif verb == 'hbeat':
                 # TODO: need to update to DB
                 logging.debug('hbeat: {}'.format(str(msg)))
@@ -271,7 +290,7 @@ class Brain(object):
                         'apps': app,
                         'timestamp': timestamp
                     }
-                    await self._mem_db_cli.set( ticket_id , str(ticket_obj))
+                    await self._mem_db_cli.set(ticket_id , str(ticket_obj))
 
                     worker_obj = {
                         'status': WorkerStatus.CREATE.name,
@@ -337,7 +356,6 @@ class Brain(object):
 
             # delete the original record
             await self._mem_db_cli.delete(ori_id)
-
 
     def start(self):
         self._main_loop.run_until_complete(self._setup())
