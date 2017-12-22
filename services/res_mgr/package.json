@@ -1,0 +1,16 @@
+{
+  "name": "res_mgr",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Resource Manager of JagerEye",
+  "main": "server.js",
+  "scripts": {},
+  "author": "JiaKuan Su",
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "^4.17.4",
+    "nats": "^0.7.24",
+    "shelljs": "^0.7.8",
+    "uuid": "^3.1.0"
+  }
+}
