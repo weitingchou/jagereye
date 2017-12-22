@@ -7,7 +7,7 @@ import json
 from jagereye.util import logging
 import time
 import uuid
-
+import inspect
 from status_enum import WorkerStatus
 
 # TODO(Ray): must merge to the STATUS enum in jagereye/worker/worker.py
@@ -17,18 +17,15 @@ with open('../../../services/messaging.json', 'r') as f:
 
 # NATS channels
 CH_API_TO_BRAIN = "ch_api_brain"
-
 CH_PUBLIC_BRAIN = "ch_brain"
-
-CH_WORKER_TO_BRAIN = ""
-CH_BRAIN_TO_WORKER = ""
 
 CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
 
-
-pending_jobs = {}
-
+def get_func_name():
+    """ get the function name when inside the current function
+    """
+    return inspect.stack()[1][3] + str('()')
 
 def binary_to_json(binary_str):
     """convert binary string into json object
@@ -109,29 +106,55 @@ class Brain(object):
         ch = recv.subject
         reply = recv.reply
         msg = binary_to_json(recv.data)
+        try:
+            verb = msg['verb']
+            context = msg['context']
+        except Exception as e:
+            logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
+        else:
+            if verb == 'hshake-3':
+                logging.debug('Received "hshake-3" in {func}: "{subject} {reply}": {data}'.\
+                    format(func=get_func_name(), subject=ch, reply=reply, data=msg))
+                logging.debug('finish handshake')
 
-        # and change the status of the worker
-        verb = msg['verb']
-        context = msg['context']
+                # change worker status in DB
+                # TODO(Ray): check 'anal_worker_id' in context, error handler
+                anal_worker_id = context['anal_worker_id']
+                analyzer_id = anal_worker_id.split(':')[1]
+                # check worker status is HSHAKE-1?
+                worker_obj = binary_to_json(await self._mem_db_cli.get(anal_worker_id))
+                if worker_obj['status'] == WorkerStatus.HSHAKE_1.name:
+                    # update worker status to READY
 
-        if verb == 'hshake-3':
-            logging.debug('Received "hshake-3" in private_brain_handler(): "{subject} {reply}": {data}'.\
-                format(subject=ch, reply=reply, data=msg))
+                    worker_obj['status'] = WorkerStatus.READY.name
+                    # TODO(Ray): error handler for redis result
+                    await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
 
-            logging.debug('finish handshake')
-            # TODO(Ray): change worker status in DB
-            # assign job to worker
-            assign_req = {
-                'verb': 'assign',
-                'context': {
-                    'workerID': context['workerID']
-                }
-            }
-            # TODO(Ray): channel need to be get by search DB with workerID
-            await self._nats_cli.publish('ch_brain_'+context['workerID'], str(assign_req).encode())
-        elif verb == 'hbeat':
-            # TODO: need to update to DB
-            logging.debug('hbeat: {}'.format(str(msg)))
+                    # check if there is a ticket for the analyzer
+                    result = await self._mem_db_cli.keys('ticket:{}:*'.format(analyzer_id))
+                    if result:
+                        # there are ticket for the analyzer
+                        # assign job to worker
+                        ticket_id = (result[0]).decode()
+                        ticket_obj = binary_to_json(await self._mem_db_cli.get(ticket_id))
+                        context['ticket'] = ticket_obj
+                        context['ticket']['ticket_id'] = ticket_id
+                        config_req = {
+                            'verb': 'config',
+                            'context': context
+                        }
+                        await self._nats_cli.publish(context['ch_to_worker'], str(config_req).encode())
+                    else:
+                        # no ticket for the analyzer
+                        logging.debug('Receive "hshake3" in {}: no ticket for analyzer {}'.\
+                                format(get_func_name(), analyzer_id))
+                else:
+                    logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
+                            format(get_func_name(), worker_obj['status']))
+
+            elif verb == 'hbeat':
+                # TODO: need to update to DB
+                logging.debug('hbeat: {}'.format(str(msg)))
 
     async def _public_brain_handler(self, recv):
         """asychronous handler for public channel all initial workers
@@ -145,35 +168,52 @@ class Brain(object):
                 reply (str): the reply channel name
                 mst (msg): message
         """
-
         ch = recv.subject
         reply = recv.reply
         msg = binary_to_json(recv.data)
-        # TODO(Ray): check the receive msg
-        # and change the status of the worker
 
-        verb = msg['verb']
-        context = msg['context']
+        try:
+            verb = msg['verb']
+            context = msg['context']
+        except Exception as e:
+            logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
+        else:
+            if verb == 'hshake-1':
+                logging.debug('Received "hshake-1" msg in {func}: "{subject}": {data}'.\
+                        format(func=get_func_name(), subject=ch, reply=reply, data=msg))
+                try:
+                    worker_id = context['workerID']
+                    # TODO(Ray): the channel name would be convention or just recv from worker?
+                    ch_worker_to_brain = context['ch_to_brain']
+                    ch_brain_to_worker = context['ch_to_worker']
+                except Exception as e:
+                    logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
+                else:
+                    # get worker_obj
+                    # TODO(Ray): check 'result', error handler
+                    result = await self._mem_db_cli.keys('anal_worker:*:{}'.format(worker_id))
+                    anal_worker_id = (result[0]).decode()
 
-        if verb == 'hshake-1':
-            logging.debug('Received "hshake-1" msg in _public_brain_handler(): "{subject} {reply}": {data}'.\
-                    format(subject=ch, reply=reply, data=msg))
-            # TODO: check if context has the keys "ch_to..."
-            # TODO: update new worker to RedisDB
-            CH_WORKER_TO_BRAIN = context['ch_to_brain']
-            CH_BRAIN_TO_WORKER = context['ch_to_worker']
+                    # check worker status is INITIAL?
+                    worker_obj = binary_to_json(await self._mem_db_cli.get(anal_worker_id))
+                    if worker_obj['status'] == WorkerStatus.INITIAL.name:
+                        # update worker status
+                        worker_obj['status'] = WorkerStatus.HSHAKE_1.name
+                        # TODO(Ray): error handler for redis result
+                        await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
 
-            hshake_reply = {
-                'verb': 'hshake-2',
-                'context': {
-                    'workerID': context['workerID']
-                }
-            }
-            # TODO: the channel name should be modified
-            await self._nats_cli.publish(CH_BRAIN_TO_WORKER, str(hshake_reply).encode())
-            # TODO(Ray): check the channel have been subscribed or not?
-            # should not be double subscribed
-            await self._nats_cli.subscribe(CH_WORKER_TO_BRAIN, cb=self._private_worker_handler)
+                        context['anal_worker_id'] = anal_worker_id
+                        hshake_reply = {
+                            'verb': 'hshake-2',
+                            'context': context
+                        }
+                        await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
+                        await self._nats_cli.subscribe(ch_worker_to_brain, cb=self._private_worker_handler)
+
+                    else:
+                        logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
+                                format(get_func_name(), worker_obj['status']))
+
 
     async def _api_handler(self, recv):
         """asychronous handler for listen cmd from api server
@@ -226,7 +266,6 @@ class Brain(object):
                     timestamp = round(time.time())
                     ticket_id = gen_ticket_id(analyzer_id)
                     anal_worker_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
-
                     # TODO: 'apps' need to re-define
                     ticket_obj = {
                         'apps': app,
@@ -239,7 +278,7 @@ class Brain(object):
                         'last_hbeat': timestamp,
                         'enabled_apps': []
                     }
-                    logging.info('Create worker "placeholder" for analyzer "{}"'.format(analyzer_id))
+                    logging.debug('Create worker "placeholder" for analyzer "{}"'.format(analyzer_id))
                     await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
 
                     # reply back to api_server
@@ -290,7 +329,6 @@ class Brain(object):
             ori_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
             worker_obj = binary_to_json(await self._mem_db_cli.get(ori_id))
             anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
-
             # change status
             worker_obj['status'] = WorkerStatus.INITIAL.name
 

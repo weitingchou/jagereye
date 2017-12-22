@@ -50,7 +50,8 @@ function createWorker(workerId, workerName) {
     // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
     // Please use normal docker instead of nvidia-docker after the GPU is split
     // from workers.
-    shell.exec(`nvidia-docker run --network="host" -e worker_id=${workerId} ${workerName}`, { async: true });
+    //shell.exec(`nvidia-docker run --network="host" -e worker_id=${workerId} ${workerName}`, { async: true });
+    shell.exec(`python3 /home/uniray7/Projects/jagereye/apps/tripwire/worker/worker.py ${workerId}`, {async: true});
 }
 
 // The list of active workers.

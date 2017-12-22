@@ -70,9 +70,7 @@ class Worker(object):
             if context["workerID"] == self._worker_id:
                 hshake_3_req = {
                         "verb": "hshake-3",
-                        "context": {
-                                "workerID": self._worker_id
-                            }
+                        "context": context
                         }
                 self._status = STATUS.READY
                 # finish handshake, so register heartbeater
@@ -80,7 +78,7 @@ class Worker(object):
                 hbeat_timer = Timer(2, self._hbeat_publisher)
                 await self._nats_cli.publish(self._ch_worker_to_brain, str(hshake_3_req).encode())
 
-        if (verb == "assign") and (self._status == STATUS.READY):
+        if (verb == "config") and (self._status == STATUS.READY):
             logging.debug("Received 'assign' msg in _brain_handler(): '{subject} {reply}': {data}".\
                     format(subject=ch, reply=reply, data=msg))
             if context["workerID"] == self._worker_id:
