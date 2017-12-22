@@ -249,11 +249,12 @@ class Brain(object):
                     # request resource manager for launch a worker
                     req = {
                         'command': MESSAGES['ch_brain_res']['CREATE_WORKER'],
+                        'ticketId': ticket_id,
                         'params': {
                             # TODO: For running multiple brain instances, the id
                             #       should combine with a brain id to create a
                             #       unique id across brains
-                            'ticketId': ticket_id
+                            'workerName': 'jagereye/worker_tripwire'
                         }
                     }
                     await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
@@ -278,7 +279,7 @@ class Brain(object):
             # whenver the resource manager create a worker for the brain
             # then inform to brain
             worker_id = msg['response']['workerId']
-            ticket_id = msg['response']['ticketId']
+            ticket_id = msg['ticketId']
             analyzer_id = ticket_id.split(':')[1]
 
             logging.info('Launch worker "{}" for analyzer "{}"'.format(worker_id, analyzer_id))
