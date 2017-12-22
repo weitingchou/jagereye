@@ -1,4 +1,5 @@
 import asyncio
+import aioredis
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 from concurrent.futures import ThreadPoolExecutor
@@ -15,27 +16,37 @@ CH_BRAIN = "ch_brain"
 STATUS = Enum("STATUS", "INITIAL HSHAKE_1 CONFIG READY RUNNING")
 
 class Worker(object):
-    def __init__(self, worker_id, mq_host='nats://localhost:4222'):
+    def __init__(self,
+                 worker_id,
+                 mq_host='nats://localhost:4222',
+                 mem_db_host='redis://localhost:6379'):
         self._main_loop = asyncio.get_event_loop()
         
         # TODO(Ray): check NATS is connected to server, error handler
         # connect NATs server, default is nats://localhost:4222
         # TODO(Ray): check mq_host is valid
         self._nats_cli = NATS()
+        self._mem_db_cli = None
         self._worker_id = worker_id
         self._ch_worker_to_brain = self._gen_ch_WtoB() 
         self._ch_brain_to_worker = self._gen_ch_BtoW()
+        self._event_queue_key = 'event:brain:{}'.format(worker_id)
         self.pipeline = None
         self._status = STATUS.INITIAL
         # TODO(Ray): not sure _subscribes should exist
         self._subscribes = []
         self._mq_host = mq_host
+        self._mem_db_host = mem_db_host
         # Create a limited thread pool.
         # _executor is to run main task like tensorflow
         self._executor = ThreadPoolExecutor(max_workers=1)
 
     async def _setup(self):
         if self._status == STATUS.INITIAL:
+            # Connect to memory database.
+            self._mem_db_cli = await aioredis.create_redis(self._mem_db_host,
+                                                           loop=self._main_loop)
+
             # TODO(Ray): need error handler for binding to an event loop
             await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
 
@@ -95,16 +106,39 @@ class Worker(object):
                 await self._nats_cli.publish(self._ch_worker_to_brain, str(config_reply).encode())
                 self._status = STATUS.RUNNING
 
-    def alert_to_brain(self, msg):
-        logging.debug("Send alert msg to brain")
-        alert_req = {
-                    "verb": "alert",
-                    "context": {
-                            "msg": msg
-                        }
-                }
-        async_alert = self._nats_cli.publish(self._ch_worker_to_brain, str(alert_req).encode())
-        asyncio.run_coroutine_threadsafe(async_alert, self._main_loop)
+    def send_event(self, name, context):
+        """Send an new event to brain.
+
+        Args:
+          name (string): The event name.
+          context (dict): The event context.
+        """
+        logging.debug('Try to send event (name = "{}", context = "{}") to brain'
+                      .format(name, context))
+
+        # Construct the key of event queue.
+        event_queue_key = 'event:brain:{}'.format(self._worker_id)
+        # Construct the event.
+        event = {
+            'name': name,
+            'context': context
+        }
+        # Construct the request to publish.
+        request = {
+            'verb': 'event',
+            'context': {
+                'workerID': self._worker_id
+            }
+        }
+        # Store the event in memory database.
+        self._mem_db_cli.rpush(event_queue_key, str(event))
+        # publish the request to brain.
+        async_publish = self._nats_cli.publish(self._ch_worker_to_brain,
+                                               str(request).encode())
+        asyncio.run_coroutine_threadsafe(async_publish, self._main_loop)
+
+        logging.debug('Success to send event (name = "{}", context = "{}") to '
+                      'brain'.format(name, context))
 
     async def _hbeat_publisher(self):
         timestamp = time.time()
