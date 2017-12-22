@@ -129,7 +129,7 @@ class Brain(object):
                     worker_obj['status'] = WorkerStatus.READY.name
                     # TODO(Ray): error handler for redis result
                     await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
-
+                    
                     # check if there is a ticket for the analyzer
                     result = await self._mem_db_cli.keys('ticket:{}:*'.format(analyzer_id))
                     if result:
@@ -171,6 +171,25 @@ class Brain(object):
                     # TODO(Ray): when status not correct, what to do?
                     logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
                             format(get_func_name, worker_obj['status']))
+            elif verb == 'event':
+                worker_id = context['workerID']
+
+                logging.debug('Event in private worker (ID = {}) handler.'
+                              .format(worker_id))
+
+                # Construct the key of event queue.
+                event_queue_key = 'event:brain:{}'.format(worker_id)
+                # Get the events.
+                events_bin = await self._mem_db_cli.lrange(event_queue_key, 0, -1)
+                # Remove the got events.
+                await self._mem_db_cli.ltrim(event_queue_key, len(events_bin), -1)
+                # Convert the events from binary to dictionary type.
+                events = []
+                for event_bin in events_bin:
+                    events.append(binary_to_json(event_bin))
+
+                # TODO: Send events back to notification service.
+                logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
             elif verb == 'hbeat':
                 # TODO: need to update to DB
                 logging.debug('hbeat: {}'.format(str(msg)))
