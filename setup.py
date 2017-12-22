@@ -10,8 +10,10 @@ DESCRIPTION = 'A large distributed scale video analysis framework.'
 
 # Dependencies for installation
 INSTALL_REQUIRED = [
+    'asyncio-nats-client',
     'numpy',
-    'six'
+    'six',
+    'tensorflow'
 ]
 
 # Dependencies for testing
