@@ -12,7 +12,7 @@ from jagereye.util import logging
 # public brain channel 
 CH_BRAIN = "ch_brain"
 
-STATUS = Enum("STATUS", "INITIAL HSHAKE_1 READY RUNNING")
+STATUS = Enum("STATUS", "INITIAL HSHAKE_1 CONFIG READY RUNNING")
 
 class Worker(object):
     def __init__(self, worker_id, mq_host='nats://localhost:4222'):
@@ -79,15 +79,22 @@ class Worker(object):
                 await self._nats_cli.publish(self._ch_worker_to_brain, str(hshake_3_req).encode())
 
         if (verb == "config") and (self._status == STATUS.READY):
-            logging.debug("Received 'assign' msg in _brain_handler(): '{subject} {reply}': {data}".\
+            logging.debug("Received 'config' msg in _brain_handler(): '{subject} {reply}': {data}".\
                     format(subject=ch, reply=reply, data=msg))
             if context["workerID"] == self._worker_id:
                 # TODO(Ray): check pipeline existed,
                 # but it has check in register_pipeline()
                 # use the thread pool to run object detect
+                # TODO(Ray): need to confirm the app is enabled correctly
                 self._main_loop.run_in_executor(self._executor, self.pipeline)
+                # response ok back to brain
+                config_reply = {
+                        'verb': 'config_ok',
+                        'context': context
+                }
+                await self._nats_cli.publish(self._ch_worker_to_brain, str(config_reply).encode())
+                self._status = STATUS.RUNNING
 
-    
     def alert_to_brain(self, msg):
         logging.debug("Send alert msg to brain")
         alert_req = {
