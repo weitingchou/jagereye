@@ -23,7 +23,7 @@ LABELS_PATH = 'coco.labels'
 LABELS_TO_FIND = ['person']
 FPS = 15
 RESERVED_SECONDS = 3
-VISUALIZE = True
+VISUALIZE = False
 NORMAL_COLOR = (226, 137, 59)
 ALERT_COLOR = (66, 194, 244)
 
@@ -57,8 +57,7 @@ def normalize_color(color):
 def worker_fn():
     """The main worker function"""
     task_info = {
-        # 'src': 'rtsp://192.168.0.3/stream1',
-        'src': '/home/feabrbries/ml_related/dataset/tripwire/motocycle.mp4',
+        'src': 'rtsp://192.168.0.3/stream1',
         'region': (100, 100, 400, 400)
     }
 
