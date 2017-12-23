@@ -3,6 +3,7 @@ import aioredis
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 import json
+from pymongo import MongoClient
 
 from jagereye.util import logging
 import time
@@ -74,11 +75,18 @@ class Brain(object):
         # TODO(Ray): check NATS is connected to server, error handler
         # TODO(Ray): check mq_host is valid
         # TODO(Ray): _nats_cli should be abstracted as _mq_cli
+        self._mq_host = mq_host
         self._nats_cli = NATS()
         self._ch_public = ch_public
+
         self._mem_db_cli = None
-        self._mq_host = mq_host
         self._mem_db_host = mem_db_host
+
+        # TODO(Ray): db api need to be abstracted,
+        # TODO(Ray): and the MongoClient is Sync, need to be replaced to async version
+        self._db_host = None
+        client = MongoClient(self._db_host)
+        self._db_cli = client.event.tripwire
 
     async def _setup(self):
         """register all handler
@@ -186,7 +194,11 @@ class Brain(object):
                 # Convert the events from binary to dictionary type.
                 events = []
                 for event_bin in events_bin:
-                    events.append(binary_to_json(event_bin))
+                    event_json = binary_to_json(event_bin)
+
+                    # TODO(Ray): need to schema validation
+                    self._db_cli.insert(event_json)
+                    events.append(event_json)
 
                 # TODO: Send events back to notification service.
                 logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
