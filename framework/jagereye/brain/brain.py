@@ -4,10 +4,10 @@ from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 from pymongo import MongoClient
 import time
-import uuid
-import inspect
 
 from jagereye.util import logging
+from jagereye.util.generic import get_func_name
+
 from jagereye.brain.utils import jsonify, jsondumps
 from jagereye.brain import ticket
 from jagereye.brain.status_enum import WorkerStatus
@@ -24,13 +24,6 @@ CH_PUBLIC_BRAIN = "ch_brain"
 
 CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
-
-
-def get_func_name():
-    """ get the function name when inside the current function
-    """
-    return inspect.stack()[1][3] + str('()')
-
 
 class Brain(object):
     """Brain the base class for brain service.
