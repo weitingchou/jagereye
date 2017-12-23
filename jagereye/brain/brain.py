@@ -43,7 +43,8 @@ class Brain(object):
     """
     def __init__(self, typename, ch_public='public_brain',
                 mq_host='nats://localhost:4222',
-                mem_db_host='redis://localhost:6379'):
+                mem_db_host='redis://localhost:6379',
+                db_host='mongodb://localhost:27017'):
 
         """initial the brain service
 
@@ -67,9 +68,9 @@ class Brain(object):
 
         # TODO(Ray): db api need to be abstracted,
         # TODO(Ray): and the MongoClient is Sync, need to be replaced to async version
-        self._db_host = None
-        client = MongoClient(self._db_host)
-        self._db_cli = client.event.tripwire
+        self._db_host = db_host
+        db_cli = MongoClient(self._db_host)
+        self._event_db_cli = db_cli.event[typename]
 
     async def _setup(self):
         """register all handler
@@ -178,7 +179,7 @@ class Brain(object):
                 for event_bin in events_bin:
                     event_json = jsonify(event_bin)
                     # TODO(Ray): need to schema validation
-                    self._db_cli.insert(event_json)
+                    self._event_db_cli.insert(event_json)
                     events.append(event_json)
 
                 # TODO: Send events back to notification service.
@@ -384,7 +385,3 @@ class Brain(object):
         self._main_loop.run_until_complete(self._setup())
         self._main_loop.run_forever()
         self._main_loop.close()
-
-if __name__ == '__main__':
-    brain = Brain('tripwire')
-    brain.start()
