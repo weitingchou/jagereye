@@ -1,8 +1,11 @@
 {
     "ch_api_brain": {
-        "REQ_APPLICATION_STATUS": "request application status",
-        "START_APPLICATION": "start application",
-        "STOP_APPLICATION": "stop application"
+        "REQ_ANALYZER_STATUS": "request analyzer status",
+        "START_ANALYZER": "start analyzer",
+        "STOP_ANALYZER": "stop analyzer"
+    },
+    "ch_api_brain_reply": {
+        "NOT_FOUND": "not found"
     },
     "ch_brain_res": {
         "CREATE_WORKER": "create worker"
