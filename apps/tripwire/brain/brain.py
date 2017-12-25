@@ -9,6 +9,7 @@ import time
 import uuid
 
 from status_enum import WorkerStatus
+from contract import API, InvalidRequestType, InvalidRequestFormat
 
 # TODO(Ray): must merge to the STATUS enum in jagereye/worker/worker.py
 # Loading messaging
@@ -25,9 +26,6 @@ CH_BRAIN_TO_WORKER = ""
 
 CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
-
-
-pending_jobs = {}
 
 
 def binary_to_json(binary_str):
@@ -47,10 +45,10 @@ def binary_to_json(binary_str):
     # TODO(Ray): check the receive msg
 
 def gen_ticket_id(analyzer_id):
-    """Generate a unique worker ID.
+    """Generate a unique ticket ID.
 
     Returns:
-        string: The unique worker ID.
+        string: The unique ticket ID.
     """
     return 'ticket:{}:{}'.format(analyzer_id, uuid.uuid4())
 
@@ -63,7 +61,7 @@ class Brain(object):
     Attributes:
 
     """
-    def __init__(self, ch_public='public_brain',
+    def __init__(self, typename, ch_public='public_brain',
                 mq_host='nats://localhost:4222',
                 mem_db_host='redis://localhost:6379'):
 
@@ -73,6 +71,8 @@ class Brain(object):
             ch_public (str): the public nats channel for listening all workers
             mq_host (str): the host and port of nats server
         """
+        self._typename = typename
+        self._API = API(self._typename)
         self._main_loop = asyncio.get_event_loop()
         # TODO(Ray): check NATS is connected to server, error handler
         # TODO(Ray): check mq_host is valid
@@ -104,7 +104,7 @@ class Brain(object):
             recv (:obj:`str`): include 'subject', 'reply', 'msg'
                 subject (str): the src channel name
                 reply (str): the reply channel name
-                mst (msg): message
+                msg (binary str): request message
         """
         ch = recv.subject
         reply = recv.reply
@@ -143,7 +143,7 @@ class Brain(object):
             recv (:obj:`str`): include 'subject', 'reply', 'msg'
                 subject (str): the src channel name
                 reply (str): the reply channel name
-                mst (msg): message
+                msg (binary str): request message
         """
 
         ch = recv.subject
@@ -182,86 +182,94 @@ class Brain(object):
             recv (:obj:`str`): include 'subject', 'reply', 'msg'
                 subject (str): the src channel name
                 reply (str): the reply channel name
-                mst (msg): message
+                msg (binary str): request message
         """
         ch = recv.subject
         reply = recv.reply
         msg = binary_to_json(recv.data)
+        timestamp = round(time.time())
 
         logging.debug('Received in api_handler() "{subject} {reply}": {data}'.\
                  format(subject=ch, reply=reply, data=msg))
 
-        if msg['command'] == MESSAGES['ch_api_brain']['REQ_APPLICATION_STATUS']:
+        try:
+            self._API.validate(msg)
+        except InvalidRequestFormat:
+            logging.error('invalid request format from api')
+            return
+        except InvalidRequestType:
+            # ignore the exception since the request is not for us
+            return
+
+        analyzer_id = msg['params']['id']
+
+        # check if there is already a ticket for analyzer #id
+        # if yes, reject the request from api since we allow only one ticket
+        # for one analyzer at a time
+        # XXX: we should synchronousely do this check to make sure checking ticket
+        #      and creating ticket in one atomic operation
+        if await self._mem_db_cli.keys('ticket:{}:*'.format(analyzer_id)):
+            logging.debug('A ticket already exists for analyzer "{}", reject the request from api'.format(analyzer_id))
+            await self._nats_cli.publish(reply, json.dumps(self._API.reply_not_aval()).encode())
+            return
+
+        # create a ticket for the request
+        ticket_id = gen_ticket_id(analyzer_id)
+        ticket_obj = {
+            'msg': msg,
+            'reply': reply,
+            'timestamp': timestamp
+        }
+        await self._mem_db_cli.set(ticket_id , str(ticket_obj))
+
+        if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
             # TODO: Return application status
             await self._nats_cli.publish(reply, str("It is running").encode())
 
-        elif msg['command'] == MESSAGES['ch_api_brain']['START_APPLICATION']:
-            # retrieve analyzer_id and apps
-            # TODO(Ray): replace 'cam_id' 'camera'
-            analyzer_id = msg['params']['camera']['id']
-            # TODO(Ray): need to well define what's in 'apps'
-            app = msg['params']['application']['name']
-
-            # check if there is a ticket for analyzer?
-            # if yes, reject the request from api
-            # it no, continue
-            ticket_res = await self._mem_db_cli.keys('ticket:{}:*'.format(analyzer_id))
-            if ticket_res:
-                # TODO(Ray): if yes, reject the request from api
-                logging.debug('if ticket exists, reject the request from api')
+        elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
+            # check if worker for the analyzer #id exists?
+            # if yes, just re-config worker
+            # if no, request resource manager for launching a worker
+            worker_res = await self._mem_db_cli.keys('anal_worker:{}:*'.format(analyzer_id))
+            if worker_res:
+                # TODO(Ray): if yes, just re-config worker
+                logging.debug('worker exists, re-configure it')
             else:
-                # it no ticket for the analyzer
+                # no worker, request resource manager for launching a new worker
 
-                # check the worker for the analyzer exists?
-                # if yes, just re-config worker
-                # if no, request resource manager for launching a worker
-                worker_res = await self._mem_db_cli.keys('anal_worker:{}:*'.format(analyzer_id))
-                if worker_res:
-                    # TODO(Ray): if yes, just re-config worker
-                    logging.debug('if worker exists, just re-config worker')
-                else:
-                    # if no worker, request resource manager for launching a worker
+                worker_state = WorkerStatus.CREATE.name
 
-                    # create a worker record & a ticket in memDB
-                    timestamp = round(time.time())
-                    ticket_id = gen_ticket_id(analyzer_id)
-                    anal_worker_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
+                # create an placeholder entry in worker table
+                anal_worker_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
+                worker_obj = {
+                    'status': worker_state,
+                    'last_hbeat': timestamp,
+                    'pipelines': []
+                }
+                await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
+                logging.debug('Create a worker "placeholder" for analyzer "{}"'.format(analyzer_id))
 
-                    # TODO: 'apps' need to re-define
-                    ticket_obj = {
-                        'apps': app,
-                        'timestamp': timestamp
+                # reply back to api_server
+                status_obj = { 'result': self._API.anal_status_obj(worker_state) }
+                await self._nats_cli.publish(reply, json.dumps(status_obj).encode())
+
+                # request resource manager to launch a worker
+                req = {
+                    'command': MESSAGES['ch_brain_res']['CREATE_WORKER'],
+                    'ticketId': ticket_id,
+                    'params': {
+                        # TODO: For running multiple brain instances, the id
+                        #       should combine with a brain id to create a
+                        #       unique id across brains
+                        'workerName': 'jagereye/worker_tripwire'
                     }
-                    await self._mem_db_cli.set( ticket_id , str(ticket_obj))
+                }
+                await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
 
-                    worker_obj = {
-                        'status': WorkerStatus.CREATE.name,
-                        'last_hbeat': timestamp,
-                        'enabled_apps': []
-                    }
-                    logging.info('Create worker "placeholder" for analyzer "{}"'.format(analyzer_id))
-                    await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
-
-                    # reply back to api_server
-                    # TODO(Ray): response needs to define
-                    await self._nats_cli.publish(reply, "OK".encode())
-
-                    # request resource manager for launch a worker
-                    req = {
-                        'command': MESSAGES['ch_brain_res']['CREATE_WORKER'],
-                        'ticketId': ticket_id,
-                        'params': {
-                            # TODO: For running multiple brain instances, the id
-                            #       should combine with a brain id to create a
-                            #       unique id across brains
-                            'workerName': 'jagereye/worker_tripwire'
-                        }
-                    }
-                    await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
-
-        elif msg['command'] == MESSAGES['ch_api_brain']['STOP_APPLICATION']:
+        elif msg['command'] == MESSAGES['ch_api_brain']['STOP_ANALYZER']:
             # TODO: Stop application
             await self._nats_cli.publish(reply, str("It is stoping").encode())
+
         else:
             logging.error('Undefined command: {}'.format(msg['command']))
 
@@ -272,7 +280,7 @@ class Brain(object):
             recv (:obj:`str`): include 'subject', 'reply', 'msg'
                 subject (str): the src channel name
                 reply (str): the reply channel name
-                mst (msg): message
+                msg (binary str): message
         """
         msg = binary_to_json(recv.data)
         if msg['command'] == MESSAGES['ch_brain_res']['CREATE_WORKER']:
@@ -307,5 +315,5 @@ class Brain(object):
         self._main_loop.close()
 
 if __name__ == '__main__':
-    brain = Brain()
+    brain = Brain('tripwire')
     brain.start()
