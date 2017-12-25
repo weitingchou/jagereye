@@ -48,7 +48,7 @@ function createError(status, message, origErrObj) {
     if (message) {
         error.message = message
     } else {
-        error.message = httpError(status)
+        error.message = httpError(status).message
     }
 
     if (origErrObj) {
@@ -90,6 +90,7 @@ function requestBrain(request, timeout, callback) {
         cb = timeout
     }
 
+    // Set a timeout for aggregating the replies
     const timer = setTimeout(() => {
         ignore = true
         cb({ code: NATS.REQ_TIMEOUT })
@@ -104,12 +105,26 @@ function requestBrain(request, timeout, callback) {
         if (!ignore) {
             count += 1
             let isLastReply = count === NUM_OF_BRAINS ? true : false
-            if (isLastReply) { clearTimeout(timer) }
+            if (isLastReply) {
+                // All replies are received, cancel the timeout
+                clearTimeout(timer)
+            }
             try {
                 const replyJSON = JSON.parse(reply)
+                if (replyJSON['code'] &&
+                    replyJSON['code'] === msg['ch_api_brain_reply']['NOT_AVAILABLE']) {
+                    let errReply = {
+                        error: {
+                            code: msg['ch_api_brain_reply']['NOT_AVAILABLE'],
+                            message: 'Runtime instance is not available to accept request right now'
+                        }
+                    }
+                    return cb(errReply, null, closeResponse)
+                }
                 cb(replyJSON, isLastReply, closeResponse)
             } catch (e) {
-                cb({ error: { message: e } }, null ,closeResponse)
+                let errReply = { error: { message: e } }
+                cb(errReply, null ,closeResponse)
             }
         }
     })
@@ -150,7 +165,7 @@ function createAnalyzerConfig(req, res, next) {
             if (err.name === 'ValidationError') {
                 return next(createError(400, null, err))
             }
-            else if (err.name === 'MongoError') {
+            if (err.name === 'MongoError') {
                 if (err.code === 11000) {
                     let dupKey = err.errmsg.slice(err.errmsg.lastIndexOf('dup key:') + 14, -3)
                     return next(createError(400, `Duplicate key error: ${dupKey}`, err))

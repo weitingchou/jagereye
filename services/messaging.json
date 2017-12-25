@@ -5,6 +5,7 @@
         "STOP_ANALYZER": "stop analyzer"
     },
     "ch_api_brain_reply": {
+        "NOT_AVAILABLE": "not available",
         "NOT_FOUND": "not found"
     },
     "ch_brain_res": {
