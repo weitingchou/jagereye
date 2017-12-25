@@ -1,8 +1,13 @@
 const fs = require('fs');
 const merge = require('lodash/merge');
 const NATS = require('nats');
+const Promise = require('bluebird');
+const redis = require('redis');
 const shell = require('shelljs');
 const uuidv4 = require('uuid/v4');
+
+Promise.promisifyAll(redis.RedisClient.prototype);
+Promise.promisifyAll(redis.Multi.prototype);
 
 // Channels for worker and resource manager.
 const CH_BRAIN_TO_RES = 'ch_brain_res';
@@ -22,22 +27,46 @@ const nats = NATS.connect({
     reconnectTimeWait: 250,
 });
 
+// Initialize memory database client.
+const mem_db_cli = redis.createClient();
+
 // Register NATS event handlers.
 // TODO(JiaKuan Su): Handle following events.
 nats.on('error', (err) => {
     console.error(err);
 });
 nats.on('connect', (nc) => {
-    console.log('connected');
+    console.log('NATS connected.');
 });
 nats.on('disconnect', () => {
-    console.log('disconnected');
+    console.log('NATS disconnected.');
 });
 nats.on('reconnecting', () => {
-    console.log('reconnecting');
+    console.log('NATS reconnecting.');
 });
 nats.on('close', () => {
-    console.log('connection closed');
+    console.log('NATS connection closed.');
+});
+
+// Register memory database client event handlers.
+// TODO(JiaKuan Su): Handle following events.
+mem_db_cli.on('error', (err) => {
+    console.error(err);
+});
+mem_db_cli.on('ready', () => {
+    console.log('Memory database ready.');
+});
+mem_db_cli.on('connect', () => {
+    console.log('Memory database connected.');
+});
+mem_db_cli.on('reconnecting', () => {
+    console.log('Memory database reconnecting.');
+});
+mem_db_cli.on('end', () => {
+    console.log('Memory database end.');
+});
+mem_db_cli.on('warning', () => {
+    console.log('Memory database warning.');
 });
 
 // Generate a unique worker ID.
@@ -53,11 +82,8 @@ function createWorker(workerId, workerName) {
     shell.exec(`nvidia-docker run --network="host" -e worker_id=${workerId} ${workerName}`, { async: true });
 }
 
-// The list of active workers.
-const workerList = {};
-
 // The messaging handler from brain.
-function brainHandler(msg) {
+async function brainHandler(msg) {
     console.log(`Request from brain: ${msg}`);
 
     const request = JSON.parse(msg.replace(/'/g, '"'));
@@ -81,13 +107,20 @@ function brainHandler(msg) {
 
             // Reply to brain.
             nats.request(CH_RES_TO_BRAIN, reply);
-
+            // Create a worker.
             createWorker(workerId, workerName);
-            workerList[workerId] = {
+            // Update worker status
+            const workerKey = `res_mgr:worker:${workerId}`;
+            const workerInfo = JSON.stringify({
                 status: WORKER_STATUS.ACTIVE,
+            });
+            try {
+                await mem_db_cli.setAsync(workerKey, workerInfo);
+                console.log(`Create worker (worker name=${workerName}, ID = ${workerId}) successfully`);
+            } catch (e) {
+                // TODO(JiaKuan Su): Error handling.
+                console.error(e);
             }
-
-            console.log(`Create worker (worker name=${workerName}, ID = ${workerId}) successfully`);
 
             break;
     }
