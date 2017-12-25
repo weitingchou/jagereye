@@ -132,6 +132,26 @@ class Brain(object):
         elif verb == 'hbeat':
             # TODO: need to update to DB
             logging.debug('hbeat: {}'.format(str(msg)))
+        elif verb == 'event':
+            worker_id = context['workerID']
+
+            logging.debug('Event in private worker (ID = {}) handler.'
+                          .format(worker_id))
+
+            # Construct the key of event queue.
+            event_queue_key = 'event:brain:{}'.format(worker_id)
+            # Get the events.
+            events_bin = await self._mem_db_cli.lrange(event_queue_key, 0, -1)
+            # Remove the got events.
+            await self._mem_db_cli.ltrim(event_queue_key, len(events_bin), -1)
+            # Convert the events from binary to dictionary type.
+            events = []
+            for event_bin in events_bin:
+                events.append(binary_to_json(event_bin))
+
+            # TODO: Send events back to notification service.
+            logging.debug('Events: "{}" from worker "{}"'.format(events,
+                                                                 worker_id))
 
     async def _public_brain_handler(self, recv):
         """asychronous handler for public channel all initial workers

@@ -8,8 +8,10 @@
   "author": "JiaKuan Su",
   "license": "MIT",
   "dependencies": {
+    "bluebird": "^3.5.1",
     "lodash": "^4.17.4",
     "nats": "^0.7.24",
+    "redis": "^2.8.0",
     "shelljs": "^0.7.8",
     "uuid": "^3.1.0"
   }

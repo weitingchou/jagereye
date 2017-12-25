@@ -13,7 +13,8 @@ INSTALL_REQUIRED = [
     'asyncio-nats-client',
     'numpy',
     'six',
-    'tensorflow'
+    'tensorflow',
+    'tensorflow-gpu'
 ]
 
 # Dependencies for testing
