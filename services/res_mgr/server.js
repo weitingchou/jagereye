@@ -15,7 +15,8 @@ const CH_RES_TO_BRAIN = 'ch_res_brain';
 
 // The possible worker status.
 const WORKER_STATUS = {
-    ACTIVE: 'ACTIVE',
+    CREATING: 'CREATING',
+    RUNNING: 'RUNNING',
 };
 
 // The Messaging format.
@@ -74,12 +75,66 @@ function genWorkerId() {
     return `worker_${uuidv4()}`;
 }
 
+// Check whether a worker name exists or not.
+function hasWorkerName(workerName) {
+    const params = { silent: true };
+    const {
+      stdout,
+    } = shell.exec(`docker images -q ${workerName} 2> /dev/null`, params);
+    return stdout !== '';
+}
+
+// Check whether the system has enough resource to lauch a new worker.
+function hasEnoughResource() {
+    // TODO(JiaKuan Su): Implement it.
+    return true;
+}
+
 // Create a worker.
 function createWorker(workerId, workerName) {
     // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
     // Please use normal docker instead of nvidia-docker after the GPU is split
     // from workers.
     shell.exec(`nvidia-docker run --network="host" -e worker_id=${workerId} ${workerName}`, { async: true });
+}
+
+// Get the key of a worker to access the memory database.
+function getWorkerKey(workerId) {
+    return `res_mgr:worker:${workerId}`;
+}
+
+// Update the status of a worker.
+async function updateWorkerStatus(workerId, status) {
+    const workerKey = getWorkerKey(workerId);
+    const workerInfo = JSON.stringify({
+        status,
+    });
+    await mem_db_cli.setAsync(workerKey, workerInfo);
+}
+
+// Helper function for replying to brain.
+function replyBrain(originRequest, reply) {
+    const replyStr = JSON.stringify(reply);
+    nats.request(CH_RES_TO_BRAIN, replyStr);
+    console.log(`Reply to brain: ${replyStr}`);
+}
+
+// Helper function for replying response to brain.
+function replyBrainResponse(originRequest, response) {
+    const reply = merge({}, originRequest, {
+        response,
+    });
+    replyBrain(originRequest, reply);
+}
+
+// Helper function for replying error to brain.
+function replyBrainError(originRequest, code) {
+    const reply = merge({}, originRequest, {
+        error: {
+            code,
+        },
+    });
+    replyBrain(originRequest, reply);
 }
 
 // The messaging handler from brain.
@@ -95,33 +150,45 @@ async function brainHandler(msg) {
             const {
                 workerName,
             } = request.params;
-            const workerId = genWorkerId();
-            // The Replied information to brain.
-            const reply = JSON.stringify(merge({}, request, {
-                response: {
-                    workerId,
-                },
-            }));
 
-            console.log(`Response to brain: ${reply}`);
+            // Check has the requested worker name or not.
+            if (!hasWorkerName(workerName)) {
+                replyBrainError(request, MESSAGING[CH_RES_TO_BRAIN]['NON_EXISTED_NAME']);
+                return;
+            }
+
+            // Check has enough resource or not.
+            if (!hasEnoughResource()) {
+                replyBrainError(request, MESSAGING[CH_RES_TO_BRAIN]['OUT_OF_RESOURCE']);
+                return;
+            }
 
             // Reply to brain.
-            nats.request(CH_RES_TO_BRAIN, reply);
-            // Create a worker.
-            createWorker(workerId, workerName);
-            // Update worker status
-            const workerKey = `res_mgr:worker:${workerId}`;
-            const workerInfo = JSON.stringify({
-                status: WORKER_STATUS.ACTIVE,
+            const workerId = genWorkerId();
+            replyBrainResponse(request, {
+                workerId,
+                status: WORKER_STATUS.CREATING,
             });
+
             try {
-                await mem_db_cli.setAsync(workerKey, workerInfo);
+                // Update worker status as "CREATING"
+                await updateWorkerStatus(workerId, WORKER_STATUS.CREATING);
+                // Create a worker.
+                createWorker(workerId, workerName);
+                // Update worker status as "RUNNING"
+                await updateWorkerStatus(workerId, WORKER_STATUS.RUNNING);
+
                 console.log(`Create worker (worker name=${workerName}, ID = ${workerId}) successfully`);
             } catch (e) {
                 // TODO(JiaKuan Su): Error handling.
                 console.error(e);
             }
 
+            break;
+
+        default:
+            replyBrainError(request, MESSAGING[CH_RES_TO_BRAIN]['NON_SUPPORTED_CMD']);
+            console.error(`Unsupported command: ${command}`);
             break;
     }
 }
