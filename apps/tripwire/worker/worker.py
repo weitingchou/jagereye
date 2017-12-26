@@ -21,7 +21,6 @@ from modules import VideoRecordModule
 
 MODEL_NAME = 'ssd_mobilenet_v1_coco_11_06_2017'
 LABELS_PATH = 'coco.labels'
-LABELS_TO_FIND = ['person']
 FPS = 15
 RESERVED_SECONDS = 3
 VISUALIZE = False
@@ -68,6 +67,7 @@ def worker_fn(context):
     alert_color = normalize_color(ALERT_COLOR)
     src = config['src']
     region = config['region']
+    triggers = config['triggers']
 
     pipeline = Pipeline(cap_interval=cap_interval)
 
@@ -76,7 +76,7 @@ def worker_fn(context):
             .pipe(ObjectDetectionModule(ckpt_path)) \
             .pipe(InRegionDetectionModule(category_index,
                                           region,
-                                          LABELS_TO_FIND)) \
+                                          triggers)) \
             .pipe(TripwireModeModule(reserved_count=reserved_count)) \
             .pipe(DrawTripwireModule(region, normal_color, alert_color)) \
             .pipe(VideoRecordModule(reserved_count,
@@ -134,6 +134,10 @@ if __name__ == '__main__':
                           '--region',
                           help='region in standalone mode',
                           type=str)
+    sl_group.add_argument('-t',
+                          '--triggers',
+                          help='triggers in standalone mode',
+                          type=str)
 
     args = parser.parse_args()
 
@@ -142,18 +146,22 @@ if __name__ == '__main__':
     else:
         # Handle arguments for standalone mode.
         # Check the required arguments for standalone mode.
-        if args.src is None or args.region is None:
-            parser.error('standalone mode requires --src and --region')
+        if args.src is None or args.region is None or args.triggers is None:
+            parser.error('standalone mode requires --src, --region and'
+                         ' --triggers')
         # Parse the region.
         p_list = args.region.split(',')
         p_list = list(map(int, p_list))
         if len(p_list) != 4:
             parser.error('Format for --region: xmin,ymin,xmax,ymax')
         region = tuple(p_list)
+        # Parse the triggers.
+        triggers = args.triggers.split(',')
         # Construct the config for standalone mode.
         config = {
             'src': args.src,
-            'region': region
+            'region': region,
+            'triggers': triggers
         }
 
     main(args.id, standalone=args.standalone, config=config)
