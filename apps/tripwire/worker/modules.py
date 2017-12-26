@@ -443,6 +443,7 @@ class VideoRecordModule(IModule):
                     'command': 'RECORD',
                     'image': reserved_image
                 })
+            blob.feed('video_name', np.array(file_name))
         elif mode == _MODE.ALERTING:
             self._queue.put({
                 'command': 'RECORD',
@@ -489,16 +490,17 @@ class OutputModule(IModule):
         for blob in blobs:
             mode = int(blob.fetch('mode'))
             timestamp = str(blob.fetch('timestamp'))
-            in_region_labels = blob.fetch('in_region_labels').tolist()
             if mode == _MODE.ALERT_START:
-                event_name = 'tripwire_alert'
-                event_context = {
-                    'timestamp': timestamp,
-                    'triggerd': in_region_labels
+                video_name = str(blob.fetch('video_name'))
+                triggered = blob.fetch('in_region_labels').tolist()
+                name = 'tripwire_alert'
+                content = {
+                    'triggered': triggered,
+                    'video_name': video_name
                 }
-                self._send_event(event_name , event_context)
-                logging.info('Sent event name: "{}", context: "{}".'
-                             .format(event_name, event_context))
+                self._send_event(name, timestamp, content)
+                logging.info('Sent event name: "{}", timestamp: "{}", content:'
+                             ' "{}"'.format(name, timestamp, content))
 
         return blobs
 

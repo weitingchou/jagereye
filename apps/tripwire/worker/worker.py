@@ -91,14 +91,16 @@ def worker_fn(context):
     pipeline.await_termination()
 
 
-def _send_event(name, context):
-    """Mock event for sending event in standalone mode.
+def _send_event(name, timestamp, content):
+    """Mock function for sending event in standalone mode.
 
     Args:
-      event (string)
+      name (string): The event name.
+      timestamp (string): The timestamp of the event.
+      content (dict): The event content.
     """
-    logging.info('From Mocked send_event with event name: "{}", context: "{}"'
-                 .format(name, context))
+    logging.info('From Mocked send_event with event name: "{}", timestamp: "{}"'
+                 ', content: "{}"'.format(name, timestamp, content))
 
 
 def main(worker_id, standalone = False, config=None):
