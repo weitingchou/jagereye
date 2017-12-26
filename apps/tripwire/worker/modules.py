@@ -188,13 +188,13 @@ class InRegionDetectionModule(IModule):
     def __init__(self,
                  category_index,
                  region,
-                 labels_to_find,
+                 triggers,
                  min_score_thresh=0.25):
         """Create a new `InRegionDetectionModule`.
 
         Args:
           category_index (dict): The labels category index.
-          labels_to_find (list of string): The interested object labels to find.
+          triggers (list of string): The interested object labels to trigger.
           region (tuple): Range of the region. The tuple contains:
             xmin (int): The left position.
             ymin (int): The top position.
@@ -203,7 +203,7 @@ class InRegionDetectionModule(IModule):
           min_score_thresh (float): The minimum threshold of score to detect.
         """
         self._category_index = category_index
-        self._labels_to_find = labels_to_find
+        self._triggers = triggers
         self._region = region
         self._min_score_thresh = min_score_thresh
 
@@ -284,7 +284,7 @@ class InRegionDetectionModule(IModule):
             if not class_id in self._category_index:
                 continue
             label = self._category_index[class_id]
-            if not label in self._labels_to_find:
+            if not label in self._triggers:
                 continue
             # Check score is >= threshold.
             score = scores[i]
