@@ -471,6 +471,14 @@ class OutputModule(IModule):
     # TODO(JiaKuan Su): Please fill the detailed docstring.
     """The module to output the results."""
 
+    def __init__(self, send_event):
+        """Create a new `OutputModule`.
+
+        Args:
+          send_event (function): The callback function for sending events.
+        """
+        self._send_event = send_event
+
     def prepare(self):
         """The routine of module preparation."""
         pass
@@ -479,10 +487,18 @@ class OutputModule(IModule):
         # TODO(JiaKuan Su): Please fill the detailed docstring.
         """The routine of module execution."""
         for blob in blobs:
-            in_region_labels = blob.fetch('in_region_labels')
-            if in_region_labels.shape[0] > 0:
-                # TODO(JiaKuan Su): Send back to brain, not just logging.
-                logging.info('Detect {} in region.'.format(in_region_labels))
+            mode = int(blob.fetch('mode'))
+            timestamp = str(blob.fetch('timestamp'))
+            in_region_labels = blob.fetch('in_region_labels').tolist()
+            if mode == _MODE.ALERT_START:
+                event_name = 'tripwire_alert'
+                event_context = {
+                    'timestamp': timestamp,
+                    'triggerd': in_region_labels
+                }
+                self._send_event(event_name , event_context)
+                logging.info('Sent event name: "{}", context: "{}".'
+                             .format(event_name, event_context))
 
         return blobs
 

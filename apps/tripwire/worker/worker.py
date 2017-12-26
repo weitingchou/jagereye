@@ -57,6 +57,7 @@ def normalize_color(color):
 
 def worker_fn(context):
     """The main worker function"""
+    send_event = context['send_event']
     config = context['config']
 
     cap_interval = 1000.0 / FPS
@@ -81,7 +82,7 @@ def worker_fn(context):
             .pipe(VideoRecordModule(reserved_count,
                                     FPS,
                                     image_name='drawn_image')) \
-            .pipe(OutputModule())
+            .pipe(OutputModule(send_event))
 
     if VISUALIZE:
         pipeline.pipe(DisplayModule(image_name='drawn_image'))
@@ -96,7 +97,8 @@ def _send_event(name, context):
     Args:
       event (string)
     """
-    logging.info('Event name: "{}", context: "{}"'.format(name, context))
+    logging.info('From Mocked send_event with event name: "{}", context: "{}"'
+                 .format(name, context))
 
 
 def main(worker_id, standalone = False, config=None):
