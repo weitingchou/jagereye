@@ -1,5 +1,6 @@
 """The tripwire worker."""
 
+import argparse
 import os
 import sys
 
@@ -54,12 +55,9 @@ def normalize_color(color):
     return (norms[0], norms[1], norms[2])
 
 
-def worker_fn():
+def worker_fn(context):
     """The main worker function"""
-    task_info = {
-        'src': 'rtsp://192.168.0.3/stream1',
-        'region': (100, 100, 400, 400)
-    }
+    config = context['config']
 
     cap_interval = 1000.0 / FPS
     reserved_count = FPS * RESERVED_SECONDS
@@ -67,8 +65,8 @@ def worker_fn():
     ckpt_path = get_ckpt_path(MODEL_NAME)
     normal_color = normalize_color(NORMAL_COLOR)
     alert_color = normalize_color(ALERT_COLOR)
-    src = task_info['src']
-    region = task_info['region']
+    src = config['src']
+    region = config['region']
 
     pipeline = Pipeline(cap_interval=cap_interval)
 
@@ -92,19 +90,68 @@ def worker_fn():
     pipeline.await_termination()
 
 
-def main(worker_id):
-    worker = Worker(worker_id)
+def _send_event(name, context):
+    """Mock event for sending event in standalone mode.
 
-    worker.register_pipeline(worker_fn)
+    Args:
+      event (string)
+    """
+    logging.info('Event name: "{}", context: "{}"'.format(name, context))
 
-    worker.start()
+
+def main(worker_id, standalone = False, config=None):
+    if not standalone:
+        worker = Worker(worker_id)
+        worker.register_pipeline(worker_fn)
+        worker.start()
+    else:
+        context = {
+            'send_event': _send_event,
+            'config': config
+        }
+        worker_fn(context)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        logging.error('Usage: python {} worker_id'.format(sys.argv[0]))
-        sys.exit(-1)
+    parser = argparse.ArgumentParser()
 
-    worker_id = sys.argv[1]
+    # Add required arguments.
+    parser.add_argument('id',
+                        help='worker ID in normal mode',
+                        type=str)
+    # Add arguments for standalone mode.
+    sl_group = parser.add_argument_group('standalone mode')
+    sl_group.add_argument('--standalone',
+                          help='run in standalone mode',
+                          action='store_true')
+    sl_group.add_argument('-s',
+                          '--src',
+                          help='streaming source in standalone mode',
+                          type=str)
+    sl_group.add_argument('-r',
+                          '--region',
+                          help='region in standalone mode',
+                          type=str)
 
-    main(worker_id)
+    args = parser.parse_args()
+
+    if not args.standalone:
+        config = None
+    else:
+        # Handle arguments for standalone mode.
+        # Check the required arguments for standalone mode.
+        if args.src is None or args.region is None:
+            parser.error('standalone mode requires --src and --region')
+        # Parse the region.
+        p_list = args.region.split(',')
+        p_list = list(map(int, p_list))
+        if len(p_list) != 4:
+            parser.error('Format for --region: xmin,ymin,xmax,ymax')
+        region = tuple(p_list)
+        # Construct the config for standalone mode.
+        config = {
+            'src': args.src,
+            'region': region
+        }
+
+    main(args.id, standalone=args.standalone, config=config)
