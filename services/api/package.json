@@ -18,6 +18,8 @@
       "bluebird": "3.5.0",
       "nats": "0.7.24",
       "ws": "3.3.2",
-      "mongoose": "4.13.6"
+      "mongoose": "4.13.6",
+      "express-validator": "4.3.0",
+      "JSONPath": "0.11.2"
   }
 }

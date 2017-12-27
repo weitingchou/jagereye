@@ -1,15 +1,17 @@
 const express = require('express')
 const bodyParser = require('body-parser')
+const expressValidator = require('express-validator')
 
-const cameras = require('./cameras')
+const analyzers = require('./analyzers')
 
 const app = express()
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
+app.use(expressValidator())
 
 // Initialize API
-app.use('/cameras', cameras)
+analyzers.addTo(app)
 
 // Logging errors
 app.use((err, req, res, next) => {
@@ -19,7 +21,11 @@ app.use((err, req, res, next) => {
 
 // Catch-all error handling
 app.use((err, req, res, next) => {
-    res.status(err.status).send(err.message)
+    const error = {
+        code: err.code,
+        message: err.message
+    }
+    res.status(err.status).send(error)
 })
 
 module.exports = app
