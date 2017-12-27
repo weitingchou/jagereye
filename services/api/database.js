@@ -3,7 +3,7 @@ const Schema = mongoose.Schema
 const fs = require('fs')
 const JSONPath = require('JSONPath')
 
-const schemaUrl = '../database/schema.json'
+const SCHEMA_URL = '../database/schema.json'
 
 // Use bluebird for Mongoose
 mongoose.Promise = require('bluebird')
@@ -18,13 +18,13 @@ function importSchema(schemaUrl) {
     const subDocSchemaList = Object.keys(schemaJSON).filter((key) => {
         return key.startsWith('subdoc_')
     })
-    let mainDocSchemaObj = {}
-    let subDocSchemaObj = {}
+    const mainDocSchemaObj = {}
+    const subDocSchemaObj = {}
 
     // Import subdocument schema first
     subDocSchemaList.forEach((item) => {
         // Validate schema
-        let result = JSONPath({json: schemaJSON[item], path: '$..*@string()'}).filter((value) => {
+        const result = JSONPath({json: schemaJSON[item], path: '$..*@string()'}).filter((value) => {
             return value.startsWith('SUBDOC_')
         })
         if (result && result.length > 0) {
@@ -36,36 +36,38 @@ function importSchema(schemaUrl) {
     })
 
     // For each main document schema, replace the subdocument placeholder
-    // with real subdocument object and create the schema object
+    // with real subdocument object and then create the schema object
     mainDocSchemaList.forEach((item) => {
-        let propertyList = JSONPath({json: schemaJSON[item], path: '$..*@string()', resultType: 'all'})
-        let subDocPropertyList = propertyList.filter((property) => {
+        const propertyList = JSONPath({json: schemaJSON[item], path: '$..*@string()', resultType: 'all'})
+        const subDocPropertyList = propertyList.filter((property) => {
             return property.value.startsWith('SUBDOC_')
         })
         subDocPropertyList.forEach((property) => {
             // Find matching subdocument schema object
-            let match = Object.keys(subDocSchemaObj).find((obj) => {
+            const match = Object.keys(subDocSchemaObj).find((obj) => {
                 return obj.toUpperCase() === property.value
             })
             if (!match) {
                 throw new Error(`Unable to find definition for subdocument placeholder "${property.value}" in main document schema "${item}"`)
             }
 
-            let pathArray = JSONPath.toPathArray(property.path)
-            let parentProperty = pathArray.slice(1, -1).reduce((accu, curr) => {
+            // Replace subdocument placeholder with matched subdocument object
+            const pathArray = JSONPath.toPathArray(property.path)
+            const parentProperty = pathArray.slice(1, -1).reduce((accu, curr) => {
                 return accu ? accu[curr] : null
             }, schemaJSON[item])
             parentProperty[pathArray.pop()] = subDocSchemaObj[match]
         })
+        // Create main document object
         mainDocSchemaObj[item] = new Schema(schemaJSON[item])
     })
     return mainDocSchemaObj
 }
 
 
-const schemaObj = importSchema(schemaUrl)
+const schemaObj = importSchema(SCHEMA_URL)
 
-let Models = {}
+const Models = {}
 Object.keys(schemaObj).forEach((objName) => {
     Models[objName] = conn.model(objName, schemaObj[objName])
 })
