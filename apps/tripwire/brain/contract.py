@@ -20,17 +20,20 @@ class API():
         self._msg_r = MESSAGES['ch_api_brain_reply']
 
     def validate(self, request):
+        # TODO: Add error messages to describe the invalid format
         try:
             if request['command'] == self._msg['START_ANALYZER']:
                 if self._typename != request['params']['type']:
                     raise InvalidRequestType
-            if not request['params']['source'] or \
-               not request['params']['pipelines']:
-                raise InvalidRequestFormat
-            if request['command'] == self._msg['REQ_ANALYZER_STATUS'] or \
-               request['command'] == self._msg['STOP_ANALYZER']:
+                if not request['params']['source'] or \
+                   not request['params']['pipelines']:
+                    raise InvalidRequestFormat
+            elif request['command'] == self._msg['REQ_ANALYZER_STATUS'] or \
+                 request['command'] == self._msg['STOP_ANALYZER']:
                 if not request['params']['id']:
                     raise InvalidRequestFormat
+            else:
+                raise InvalidRequestFormat
         except KeyError as e:
             logging.error('KeyError: {}'.format(e))
             raise InvalidRequestFormat

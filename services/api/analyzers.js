@@ -119,12 +119,12 @@ function requestBrain(request, timeout, callback) {
                             message: 'Runtime instance is not available to accept request right now'
                         }
                     }
-                    return cb(errReply, null, closeResponse)
+                    return cb(errReply, isLastReply, closeResponse)
                 }
                 cb(replyJSON, isLastReply, closeResponse)
             } catch (e) {
                 const errReply = { error: { message: e } }
-                cb(errReply, null ,closeResponse)
+                cb(errReply, isLastReply, closeResponse)
             }
         }
     })
