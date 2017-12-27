@@ -104,7 +104,7 @@ function requestBrain(request, timeout, callback) {
     nats.request(CH_API_BRAIN, request, {'max': NUM_OF_BRAINS}, (reply) => {
         if (!ignore) {
             count += 1
-            let isLastReply = count === NUM_OF_BRAINS ? true : false
+            let isLastReply = count === NUM_OF_BRAINS
             if (isLastReply) {
                 // All replies are received, cancel the timeout
                 clearTimeout(timer)
@@ -113,7 +113,7 @@ function requestBrain(request, timeout, callback) {
                 const replyJSON = JSON.parse(reply)
                 if (replyJSON['code'] &&
                     replyJSON['code'] === msg['ch_api_brain_reply']['NOT_AVAILABLE']) {
-                    let errReply = {
+                    const errReply = {
                         error: {
                             code: msg['ch_api_brain_reply']['NOT_AVAILABLE'],
                             message: 'Runtime instance is not available to accept request right now'
@@ -123,7 +123,7 @@ function requestBrain(request, timeout, callback) {
                 }
                 cb(replyJSON, isLastReply, closeResponse)
             } catch (e) {
-                let errReply = { error: { message: e } }
+                const errReply = { error: { message: e } }
                 cb(errReply, null ,closeResponse)
             }
         }
@@ -178,7 +178,7 @@ function createAnalyzerConfig(req, res, next) {
 }
 
 function deleteAllAnalyzers(req, res, next) {
-
+    // TODO: Implement the function
 }
 
 function getAnalyzerConfig(req, res, next) {
@@ -231,7 +231,7 @@ function deleteAnalyzer(req, res, next) {
 }
 
 function updateAnalyzerConfig(req, res, next) {
-
+    // TODO: Implement the function
 }
 
 function getAnalyzerSourceConfig(req, res, next) {
@@ -248,7 +248,7 @@ function getAnalyzerSourceConfig(req, res, next) {
 }
 
 function updateAnalyzerSourceConfig(req, res, next) {
-
+    // TODO: Implement the function
 }
 
 function getAnalyzerPipelineConfig(req, res, next) {
@@ -265,7 +265,7 @@ function getAnalyzerPipelineConfig(req, res, next) {
 }
 
 function updateAnalyzerPipelineConfig(req, res, next) {
-
+    // TODO: Implement the function
 }
 
 function getAnalyzerRuntime(req, res, next) {
@@ -350,7 +350,7 @@ function createAnalyzerRuntime(req, res, next) {
 }
 
 function updateAnalyzerRuntime(req, res, next) {
-
+    // TODO: Implement the function
 }
 
 function deleteAnalyzerRuntime(req, res, next) {
