@@ -337,6 +337,14 @@ class Brain(object):
                 msg (binary str): message
         """
         msg = jsonify(recv.data)
+
+        # Check has error or not.
+        if 'error' in msg:
+            # TODO(JiaKuan Su): Error handling.
+            logging.error('Error code: "{}" from resource manager'
+                          .format(msg['error']['code']))
+            return
+
         if msg['command'] == MESSAGES['ch_brain_res']['CREATE_WORKER']:
             # whenver the resource manager create a worker for the brain
             # then inform to brain
