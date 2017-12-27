@@ -254,7 +254,7 @@ class Brain(object):
         try:
             self._API.validate(msg)
         except InvalidRequestFormat:
-            logging.error('invalid request format from api')
+            logging.error('Exception in {}: invalid request format from api'.format(get_func_name()))
             return
         except InvalidRequestType:
             # ignore the exception since the request is not for us
