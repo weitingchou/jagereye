@@ -1,6 +1,7 @@
 """The modules used by tripwire worker."""
 
 import threading
+import os
 from queue import Queue
 
 import cv2
@@ -385,7 +386,7 @@ class VideoRecordModule(IModule):
     # TODO(JiaKuan Su): Please fill the detailed docstring.
     """The module for recording video clips."""
 
-    def __init__(self, reserved_count, fps, image_name='image'):
+    def __init__(self, files_dir, reserved_count, fps, image_name='image'):
         """Create a new `VideoRecordModule`.
 
         Args:
@@ -394,6 +395,7 @@ class VideoRecordModule(IModule):
           image_name (string): The name of input tensor to read. Defaults to
             "image".
         """
+        self._files_dir = files_dir
         self._reserved_count = reserved_count
         self._fps = fps
         self._image_name = image_name
@@ -429,8 +431,11 @@ class VideoRecordModule(IModule):
 
         # Handle alert mode.
         if mode == _MODE.ALERT_START:
+            if not os.path.exists(self._files_dir):
+                os.makedirs(self._files_dir)
             # TODO(JiaKuan Su): Browser can't play avi files, use mp4 instead.
-            file_name = '{}.avi'.format(timestamp)
+            file_name = os.path.join(self._files_dir,
+                                     '{}.avi'.format(timestamp))
             video_size = (im_width, im_height)
             self._queue = Queue()
             args = (file_name, self._fps, video_size, self._queue,)

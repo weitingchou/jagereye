@@ -3,6 +3,7 @@ import aioredis
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 from concurrent.futures import ThreadPoolExecutor
+import os
 import time
 import json
 from enum import Enum
@@ -17,7 +18,9 @@ STATUS = Enum("STATUS", "INITIAL HSHAKE_1 CONFIG READY RUNNING")
 
 class Worker(object):
     def __init__(self,
+                 name,
                  worker_id,
+                 shared_dir='~/jagereye_shared',
                  mq_host='nats://localhost:4222',
                  mem_db_host='redis://localhost:6379'):
         self._main_loop = asyncio.get_event_loop()
@@ -27,7 +30,10 @@ class Worker(object):
         # TODO(Ray): check mq_host is valid
         self._nats_cli = NATS()
         self._mem_db_cli = None
+        self._name = name
         self._worker_id = worker_id
+        files_dir = os.path.join(shared_dir, name, worker_id)
+        self._files_dir = os.path.expanduser(files_dir)
         self._ch_worker_to_brain = self._gen_ch_WtoB() 
         self._ch_brain_to_worker = self._gen_ch_BtoW()
         self._event_queue_key = 'event:brain:{}'.format(worker_id)

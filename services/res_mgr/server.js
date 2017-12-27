@@ -13,6 +13,10 @@ Promise.promisifyAll(redis.Multi.prototype);
 const CH_BRAIN_TO_RES = 'ch_brain_res';
 const CH_RES_TO_BRAIN = 'ch_res_brain';
 
+// The shared directory between host and containers.
+const HOST_SHARED_DIR = '~/jagereye_shared';
+const CONTAINER_SHARED_DIR = '/root/jagereye_shared';
+
 // The possible worker status.
 const WORKER_STATUS = {
     CREATING: 'CREATING',
@@ -95,7 +99,13 @@ function createWorker(workerId, workerName) {
     // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
     // Please use normal docker instead of nvidia-docker after the GPU is split
     // from workers.
-    shell.exec(`nvidia-docker run --network="host" -e worker_id=${workerId} ${workerName}`, { async: true });
+    const cmd = `nvidia-docker run \
+        --network="host" \
+        -v ${HOST_SHARED_DIR}:${CONTAINER_SHARED_DIR} \
+        -e worker_id=${workerId} \
+        ${workerName}`;
+    const params = { async: true };
+    shell.exec(cmd, params);
 }
 
 // Get the key of a worker to access the memory database.
