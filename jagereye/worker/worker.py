@@ -106,22 +106,24 @@ class Worker(object):
                 await self._nats_cli.publish(self._ch_worker_to_brain, str(config_reply).encode())
                 self._status = STATUS.RUNNING
 
-    def send_event(self, name, context):
+    def send_event(self, name, timestamp, content):
         """Send an new event to brain.
 
         Args:
           name (string): The event name.
-          context (dict): The event context.
+          timestamp (string): The timestamp of the event.
+          content (dict): The event content.
         """
-        logging.debug('Try to send event (name = "{}", context = "{}") to brain'
-                      .format(name, context))
+        logging.debug('Try to send event (name = "{}", timestamp = "{}", content'
+                      ' = "{}") to brain'.format(name, timestamp, content))
 
         # Construct the key of event queue.
         event_queue_key = 'event:brain:{}'.format(self._worker_id)
         # Construct the event.
         event = {
             'name': name,
-            'context': context
+            'timestamp': timestamp,
+            'content': content
         }
         # Construct the request to publish.
         request = {
@@ -137,8 +139,8 @@ class Worker(object):
                                                str(request).encode())
         asyncio.run_coroutine_threadsafe(async_publish, self._main_loop)
 
-        logging.debug('Success to send event (name = "{}", context = "{}") to '
-                      'brain'.format(name, context))
+        logging.debug('Success to send event (name = "{}", timestamp = "{}", '
+                      'content = "{}") to brain'.format(name, timestamp, content))
 
     async def _hbeat_publisher(self):
         timestamp = time.time()

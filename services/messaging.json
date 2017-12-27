@@ -10,5 +10,10 @@
     },
     "ch_brain_res": {
         "CREATE_WORKER": "create worker"
+    },
+    "ch_res_brain": {
+        "NON_EXISTED_NAME": "non-existed name",
+        "NON_SUPPORTED_CMD": "non-supported command",
+        "OUT_OF_RESOURCE": "out of resource"
     }
 }

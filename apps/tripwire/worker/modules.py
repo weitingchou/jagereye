@@ -188,13 +188,13 @@ class InRegionDetectionModule(IModule):
     def __init__(self,
                  category_index,
                  region,
-                 labels_to_find,
+                 triggers,
                  min_score_thresh=0.25):
         """Create a new `InRegionDetectionModule`.
 
         Args:
           category_index (dict): The labels category index.
-          labels_to_find (list of string): The interested object labels to find.
+          triggers (list of string): The interested object labels to trigger.
           region (tuple): Range of the region. The tuple contains:
             xmin (int): The left position.
             ymin (int): The top position.
@@ -203,7 +203,7 @@ class InRegionDetectionModule(IModule):
           min_score_thresh (float): The minimum threshold of score to detect.
         """
         self._category_index = category_index
-        self._labels_to_find = labels_to_find
+        self._triggers = triggers
         self._region = region
         self._min_score_thresh = min_score_thresh
 
@@ -284,7 +284,7 @@ class InRegionDetectionModule(IModule):
             if not class_id in self._category_index:
                 continue
             label = self._category_index[class_id]
-            if not label in self._labels_to_find:
+            if not label in self._triggers:
                 continue
             # Check score is >= threshold.
             score = scores[i]
@@ -443,6 +443,7 @@ class VideoRecordModule(IModule):
                     'command': 'RECORD',
                     'image': reserved_image
                 })
+            blob.feed('video_name', np.array(file_name))
         elif mode == _MODE.ALERTING:
             self._queue.put({
                 'command': 'RECORD',
@@ -471,6 +472,14 @@ class OutputModule(IModule):
     # TODO(JiaKuan Su): Please fill the detailed docstring.
     """The module to output the results."""
 
+    def __init__(self, send_event):
+        """Create a new `OutputModule`.
+
+        Args:
+          send_event (function): The callback function for sending events.
+        """
+        self._send_event = send_event
+
     def prepare(self):
         """The routine of module preparation."""
         pass
@@ -479,10 +488,19 @@ class OutputModule(IModule):
         # TODO(JiaKuan Su): Please fill the detailed docstring.
         """The routine of module execution."""
         for blob in blobs:
-            in_region_labels = blob.fetch('in_region_labels')
-            if in_region_labels.shape[0] > 0:
-                # TODO(JiaKuan Su): Send back to brain, not just logging.
-                logging.info('Detect {} in region.'.format(in_region_labels))
+            mode = int(blob.fetch('mode'))
+            timestamp = str(blob.fetch('timestamp'))
+            if mode == _MODE.ALERT_START:
+                video_name = str(blob.fetch('video_name'))
+                triggered = blob.fetch('in_region_labels').tolist()
+                name = 'tripwire_alert'
+                content = {
+                    'triggered': triggered,
+                    'video_name': video_name
+                }
+                self._send_event(name, timestamp, content)
+                logging.info('Sent event name: "{}", timestamp: "{}", content:'
+                             ' "{}"'.format(name, timestamp, content))
 
         return blobs
 
