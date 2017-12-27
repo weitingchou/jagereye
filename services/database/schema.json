@@ -1,28 +1,42 @@
 {
-    "cameras": {
-        "device_name": {
+    "subdoc_source": {
+        "_id": { "auto": false },
+        "mode": {
+            "type": "String",
+            "required": true,
+            "enum": [ "file", "stream" ]
+        },
+        "url": {
+            "type": "String",
+            "required": true
+        }
+    },
+    "subdoc_pipelines": {
+        "_id": { "auto": false },
+        "name": {
             "type": "String",
             "required": true
         },
-        "streaming_protocol": {
-            "type": "String",
-            "default": "rtsp"
-        },
-        "host": {
-            "type": "String",
+        "params": {
+            "type": "Object",
             "required": true
-        },
-        "port": {
-            "type": "Number",
-            "required": true
-        },
-        "path": {
+        }
+    },
+    "analyzers": {
+        "name": {
             "type": "String",
-            "default": "/"
+            "required": true,
+            "unique": true
+        },
+        "type": {
+            "type": "String",
+            "enum": [ "tripwire" ]
         },
         "enabled": {
             "type": "Boolean",
             "default": false
-        }
+        },
+        "source": "SUBDOC_SOURCE",
+        "pipelines": [ "SUBDOC_PIPELINES" ]
     }
 }
