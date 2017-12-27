@@ -19,6 +19,7 @@ from modules import TripwireModeModule
 from modules import VideoRecordModule
 
 
+WORKER_NAME = 'tripwire'
 MODEL_NAME = 'ssd_mobilenet_v1_coco_11_06_2017'
 LABELS_PATH = 'coco.labels'
 FPS = 15
@@ -57,6 +58,7 @@ def normalize_color(color):
 def worker_fn(context):
     """The main worker function"""
     send_event = context['send_event']
+    files_dir = context['files_dir']
     config = context['config']
 
     cap_interval = 1000.0 / FPS
@@ -79,7 +81,8 @@ def worker_fn(context):
                                           triggers)) \
             .pipe(TripwireModeModule(reserved_count=reserved_count)) \
             .pipe(DrawTripwireModule(region, normal_color, alert_color)) \
-            .pipe(VideoRecordModule(reserved_count,
+            .pipe(VideoRecordModule(files_dir,
+                                    reserved_count,
                                     FPS,
                                     image_name='drawn_image')) \
             .pipe(OutputModule(send_event))
@@ -105,12 +108,15 @@ def _send_event(name, timestamp, content):
 
 def main(worker_id, standalone = False, config=None):
     if not standalone:
-        worker = Worker(worker_id)
+        worker = Worker(WORKER_NAME, worker_id)
         worker.register_pipeline(worker_fn)
         worker.start()
     else:
+        files_dir = os.path.join('~/jagereye_shared', WORKER_NAME, worker_id)
+        files_dir = os.path.expanduser(files_dir)
         context = {
             'send_event': _send_event,
+            'files_dir': files_dir,
             'config': config
         }
         worker_fn(context)
