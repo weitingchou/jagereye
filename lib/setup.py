@@ -56,6 +56,47 @@ class LintCommand(Command):
     def run(self):
         subprocess.check_call(['pylint', 'jagereye'])
 
+
+class DockerCommand(Command):
+    """Command to build docker images."""
+
+    description = 'Build docker images.'
+    user_options = [
+        ('target=', None, 'Target to build')
+    ]
+    self.supported_targets = [
+        'worker'
+    ]
+
+    def initialize_options(self):
+        self.target = None
+
+    def finalize_options(self):
+        if self.target is not None:
+            if self.target not in self.supported_targets:
+                raise Exception('Unsupported docker image: {}'
+                                .format(self.target))
+
+    def run(self):
+        if self.target is not None:
+            self._build(self.target)
+        else:
+            for target in self.supported_targets:
+                self._build(target)
+
+    def _build(self, target):
+        docker_file = 'docker/Dockerfile.{}'.format(target)
+        image_name = 'jagereye/{}'.format(target)
+        docker_cmd = [
+            'docker', 'build',
+            '-f', docker_file,
+            '-t', image_name,
+            '.'
+        ]
+        print('Building Docker: file = {}, image={}'
+              .format(docker_file, image_name))
+        # subprocess.check_call(docker_cmd)
+
 setup(
     name=NAME,
     version=VERSION,
@@ -67,6 +108,7 @@ setup(
     zip_safe=False,
     cmdclass = {
         'doc': DocCommand,
+        'docker': DockerCommand,
         'lint': LintCommand
     }
 )
