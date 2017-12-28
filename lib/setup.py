@@ -8,6 +8,7 @@ NAME = 'jagereye'
 VERSION = '0.0.1'
 DESCRIPTION = 'A large distributed scale video analysis framework.'
 
+
 # Dependencies for installation
 INSTALL_REQUIRED = [
     'asyncio-nats-client',
@@ -17,6 +18,7 @@ INSTALL_REQUIRED = [
     'tensorflow-gpu'
 ]
 
+
 # Dependencies for testing
 SETUP_REQUIRED=[
     'pytest-runner'
@@ -25,6 +27,7 @@ TESTS_REQUIRED=[
     'pytest',
     'pytest-mock'
 ]
+
 
 class DocCommand(Command):
     """Command to generate documentation."""
@@ -40,6 +43,7 @@ class DocCommand(Command):
 
     def run(self):
         subprocess.check_call(['doxygen', '.Doxyfile'])
+
 
 class LintCommand(Command):
     """Command to lint source code."""
@@ -64,7 +68,7 @@ class DockerCommand(Command):
     user_options = [
         ('target=', None, 'Target to build')
     ]
-    self.supported_targets = [
+    supported_targets = [
         'worker'
     ]
 
@@ -95,7 +99,8 @@ class DockerCommand(Command):
         ]
         print('Building Docker: file = {}, image={}'
               .format(docker_file, image_name))
-        # subprocess.check_call(docker_cmd)
+        subprocess.check_call(docker_cmd)
+
 
 setup(
     name=NAME,
