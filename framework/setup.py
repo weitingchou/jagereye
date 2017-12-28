@@ -1,3 +1,4 @@
+import glob
 from setuptools import Command
 from setuptools import find_packages
 from setuptools import setup
@@ -7,16 +8,6 @@ import subprocess
 NAME = 'jagereye'
 VERSION = '0.0.1'
 DESCRIPTION = 'A large distributed scale video analysis framework.'
-
-
-# Dependencies for installation
-INSTALL_REQUIRED = [
-    'asyncio-nats-client',
-    'numpy',
-    'six',
-    'tensorflow',
-    'tensorflow-gpu'
-]
 
 
 # Dependencies for testing
@@ -102,18 +93,35 @@ class DockerCommand(Command):
         subprocess.check_call(docker_cmd)
 
 
-setup(
-    name=NAME,
-    version=VERSION,
-    description=DESCRIPTION,
-    packages=find_packages(exclude='testdata'),
-    install_requires=INSTALL_REQUIRED,
-    setup_requires=SETUP_REQUIRED,
-    tests_require=TESTS_REQUIRED,
-    zip_safe=False,
-    cmdclass = {
-        'doc': DocCommand,
-        'docker': DockerCommand,
-        'lint': LintCommand
-    }
-)
+def load_requirements():
+    requirements = []
+    req_files = glob.glob('./requirements*.txt')
+    for req_file in req_files:
+        with open(req_file) as f:
+            content = f.readlines()
+        lines = [x.strip() for x in content]
+        requirements = requirements + list(set(lines) - set(requirements))
+    return requirements
+
+
+def main():
+    install_requires = load_requirements()
+    setup(
+        name=NAME,
+        version=VERSION,
+        description=DESCRIPTION,
+        packages=find_packages(exclude='testdata'),
+        install_requires=install_requires,
+        setup_requires=SETUP_REQUIRED,
+        tests_require=TESTS_REQUIRED,
+        zip_safe=False,
+        cmdclass = {
+            'doc': DocCommand,
+            'docker': DockerCommand,
+            'lint': LintCommand
+        }
+    )
+
+
+if __name__ == '__main__':
+    main()

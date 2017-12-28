@@ -72,6 +72,7 @@ RUN rm -r \
 WORKDIR jagereye
 COPY setup.py .
 COPY setup.cfg .
+COPY requirements.worker.txt .
 COPY jagereye jagereye
 RUN python3 setup.py install
 WORKDIR $HOME
