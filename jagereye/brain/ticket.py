@@ -1,5 +1,5 @@
 import aioredis
-from utils import jsonify, jsondumps
+from jagereye.brain.utils import jsonify, jsondumps
 
 
 MEMDB_HOST = 'redis://localhost:6379'
