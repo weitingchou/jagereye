@@ -1,4 +1,0 @@
-asyncio
-nats
-aioredis
-pymongo
