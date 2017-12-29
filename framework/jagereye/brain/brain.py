@@ -4,15 +4,15 @@ from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 from pymongo import MongoClient
 import time
-import uuid
-import inspect
 
 from jagereye.brain.utils import jsonify, jsondumps
 from jagereye.brain import ticket
+from jagereye.brain.event_agent import EventAgent
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
 from jagereye.util import logging
 from jagereye.util import static_util
+from jagereye.util.generic import get_func_name
 
 # TODO(Ray): must merge to the STATUS enum in jagereye/worker/worker.py
 # Loading messaging
@@ -25,13 +25,6 @@ CH_PUBLIC_BRAIN = "ch_brain"
 
 CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
-
-
-def get_func_name():
-    """ get the function name when inside the current function
-    """
-    return inspect.stack()[1][3] + str('()')
-
 
 class Brain(object):
     """Brain the base class for brain service.
@@ -64,6 +57,8 @@ class Brain(object):
         self._ch_public = ch_public
         
         self._ticket = None
+        self._event_agent = None
+
         self._mem_db_cli = None
         self._mem_db_host = mem_db_host
 
@@ -71,7 +66,7 @@ class Brain(object):
         # TODO(Ray): and the MongoClient is Sync, need to be replaced to async version
         self._db_host = db_host
         db_cli = MongoClient(self._db_host)
-        self._event_db_cli = db_cli.event[typename]
+        self._event_db = db_cli.event
 
     async def _setup(self):
         """register all handler
@@ -80,6 +75,7 @@ class Brain(object):
         # TODO(Ray): both are mem db operations, need to be abstracted, or redesign
         self._mem_db_cli = await aioredis.create_redis(self._mem_db_host, loop=self._main_loop)
         self._ticket = await ticket.create_ticket(self._main_loop)
+        self._event_agent = EventAgent(self._typename, self._mem_db_cli, self._event_db)
 
         await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
         await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
@@ -166,25 +162,24 @@ class Brain(object):
             elif verb == 'event':
                 worker_id = context['workerID']
 
-                logging.debug('Event in private worker (ID = {}) handler.'
-                              .format(worker_id))
+                # TODO(Ray): worker table operation abstraction
+                anal_worker_id = await self._mem_db_cli.keys('anal_worker:*:{}'.format(worker_id))
+                anal_worker_id = str(anal_worker_id[0])
+                # retrieve analyzer_id
+                analyzer_id = anal_worker_id.split(':')[1]
 
-                # Construct the key of event queue.
-                event_queue_key = 'event:brain:{}'.format(worker_id)
-                # Get the events.
-                events_bin = await self._mem_db_cli.lrange(event_queue_key, 0, -1)
-                # Remove the got events.
-                await self._mem_db_cli.ltrim(event_queue_key, len(events_bin), -1)
-                # Convert the events from binary to dictionary type.
-                events = []
-                for event_bin in events_bin:
-                    event_json = jsonify(event_bin)
-                    # TODO(Ray): need to schema validation
-                    self._event_db_cli.insert(event_json)
-                    events.append(event_json)
+                logging.debug('Receive event inform in {}.'.format(get_func_name()))
+
+                # consume events from the worker
+                events = await self._event_agent.consume_from_worker(worker_id)
+                if not events:
+                    return
+
+                self._event_agent.store_in_db(events, analyzer_id)
+
+                logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
 
                 # TODO: Send events back to notification service.
-                logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
             elif verb == 'hbeat':
                 # TODO: need to update to DB
                 logging.debug('hbeat: {}'.format(str(msg)))
