@@ -1,0 +1,17 @@
+{
+  "title": "event_db",
+  "type": "object", 
+  "properties": {
+    "timestamp": {
+      "type": "number"
+    },
+    "name": {
+      "type": "string"
+    },
+    "content": {
+      "type": "object"
+    }
+  }, 
+    
+  "required":["name", "content"]
+}
