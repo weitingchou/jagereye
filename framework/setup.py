@@ -1,7 +1,10 @@
 import glob
+import os
 from setuptools import Command
 from setuptools import find_packages
 from setuptools import setup
+from shutil import copy
+from shutil import rmtree
 import subprocess
 
 # Metadata about the package
@@ -60,7 +63,8 @@ class DockerCommand(Command):
         ('target=', None, 'Target to build')
     ]
     supported_targets = [
-        'worker'
+        'worker',
+        'brain'
     ]
 
     def initialize_options(self):
@@ -93,7 +97,24 @@ class DockerCommand(Command):
         subprocess.check_call(docker_cmd)
 
 
+def cp_static_files(static_files):
+    """Copy files to static folder.
+
+    Args:
+      static_files (list of string): The files to be copied.
+    """
+    static_dir = os.path.join(NAME, 'static')
+    # Create the static directory if necessary.
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    # Now, copy files into the static directory.
+    for static_file in static_files:
+        if os.path.isfile(static_file):
+            copy(static_file, static_dir)
+            print('Copy {} into {}'.format(static_file, static_dir))
+
 def load_requirements():
+    """Load requirements files."""
     requirements = []
     req_files = glob.glob('./requirements*.txt')
     for req_file in req_files:
@@ -105,13 +126,28 @@ def load_requirements():
 
 
 def main():
+    # Get the project root directory.
+    if 'JAGER_ROOT' in os.environ:
+        proj_root = os.environ['JAGER_ROOT']
+    else:
+        proj_root = os.path.join(os.getcwd(), '..')
+
+    # Copy static files into framework library directory.
+    cp_static_files([
+        os.path.join(proj_root, 'services/messaging.json')
+    ])
+
+    # Load the requirements.
     install_requires = load_requirements()
+
+    # Now, run the setup script.
     setup(
         name=NAME,
         version=VERSION,
         description=DESCRIPTION,
-        packages=find_packages(exclude='testdata'),
+        packages=find_packages(include=[NAME, '{}.*'.format(NAME)]),
         install_requires=install_requires,
+        include_package_data=True,
         setup_requires=SETUP_REQUIRED,
         tests_require=TESTS_REQUIRED,
         zip_safe=False,

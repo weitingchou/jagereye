@@ -1,4 +1,5 @@
 asyncio-nats-client
+aioredis
 numpy
 six
 tensorflow
