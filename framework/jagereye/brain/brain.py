@@ -59,6 +59,7 @@ class Brain(object):
         
         self._ticket = None
         self._event_agent = None
+
         self._mem_db_cli = None
         self._mem_db_host = mem_db_host
 
@@ -174,8 +175,8 @@ class Brain(object):
                 events = await self._event_agent.consume_from_worker(worker_id)
                 if not events:
                     return
-                self._event_agent.add_analyzer_field(events, analyzer_id)
-                self._event_agent.store_in_db(events)
+
+                self._event_agent.store_in_db(events, analyzer_id)
 
                 logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
 

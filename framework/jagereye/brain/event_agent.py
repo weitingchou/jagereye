@@ -13,33 +13,33 @@ schema_path = os.path.join(cuurent_path, 'schema/event.json')
 schema = json.load(open(schema_path))
 validator = Validator(schema)
 
-class EventAgent():
+class EventAgent(object):
     def __init__(self, typename, mem_db, db):
         self._typename = typename
         self._mem_db = mem_db
         self._db = db
 
-    def add_analyzer_field(self, events, analyzer_id):
+
+    def store_in_db(self, events, analyzer_id):
+        # validate
+        valid_events = []
         for event in events:
             event['analyzer_id'] = analyzer_id
-
-    def store_in_db(self, events):
-        # validate
-        for event in events:
             if not validator.is_valid(event):
                 logging.error('Fail validation for event {}'.format(event))
-                events.remove(event)
+            else:
+                valid_events.append(event)
         # TODO(Ray): error handler and logging if insert failed
-        self._db[self._typename].insert_many(events)
+        self._db[self._typename].insert_many(valid_events)
 
     async def consume_from_worker(self, worker_id):
         """Get event array by worker ID.
 
         Args:
-            worker_id: worker ID
+            worker_id (string): worker ID
 
         Returns:
-            an array of event object
+            list of dict: an array of events from the worker
         """
         # Construct the key of event queue.
         event_queue_key = 'event:brain:{}'.format(worker_id)
