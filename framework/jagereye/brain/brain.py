@@ -7,15 +7,16 @@ import time
 import uuid
 import inspect
 
-from jagereye.util import logging
 from jagereye.brain.utils import jsonify, jsondumps
 from jagereye.brain import ticket
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
+from jagereye.util import logging
+from jagereye.util import static_util
 
 # TODO(Ray): must merge to the STATUS enum in jagereye/worker/worker.py
 # Loading messaging
-with open('../../../services/messaging.json', 'r') as f:
+with open(static_util.get_path('messaging.json'), 'r') as f:
     MESSAGES = jsonify(f.read())
 
 # NATS channels

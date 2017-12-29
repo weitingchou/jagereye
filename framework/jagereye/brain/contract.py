@@ -1,7 +1,8 @@
 import json
 from jagereye.util import logging
+from jagereye.util import static_util
 
-with open('../../../services/messaging.json', 'r') as f:
+with open(static_util.get_path('messaging.json'), 'r') as f:
     MESSAGES = json.loads(f.read())
 
 
