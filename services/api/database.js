@@ -3,7 +3,7 @@ const Schema = mongoose.Schema
 const fs = require('fs')
 const JSONPath = require('JSONPath')
 
-const SCHEMA_URL = '../database/schema.json'
+const SCHEMA_URL = '../../shared/database.json'
 
 // Use bluebird for Mongoose
 mongoose.Promise = require('bluebird')
