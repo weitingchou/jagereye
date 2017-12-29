@@ -81,8 +81,6 @@ class Brain(object):
         await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
         await self._nats_cli.subscribe(CH_PUBLIC_BRAIN, cb=self._public_brain_handler)
         await self._nats_cli.subscribe(CH_RES_TO_BRAIN, cb=self._res_handler)
-        
-        await self._nats_cli.subscribe('worker_123', cb=self._private_worker_handler)
 
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers
@@ -164,7 +162,6 @@ class Brain(object):
             elif verb == 'event':
                 worker_id = context['workerID']
 
-
                 # TODO(Ray): worker table operation abstraction
                 anal_worker_id = await self._mem_db_cli.keys('anal_worker:*:{}'.format(worker_id))
                 anal_worker_id = str(anal_worker_id[0])
@@ -172,8 +169,11 @@ class Brain(object):
                 analyzer_id = anal_worker_id.split(':')[1]
 
                 logging.debug('Receive event inform in {}.'.format(get_func_name()))
+
                 # consume events from the worker
                 events = await self._event_agent.consume_from_worker(worker_id)
+                if not events:
+                    return
                 self._event_agent.add_analyzer_field(events, analyzer_id)
                 self._event_agent.store_in_db(events)
 

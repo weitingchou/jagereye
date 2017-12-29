@@ -2,6 +2,9 @@
   "title": "event_db",
   "type": "object", 
   "properties": {
+    "analyzer_id": {
+      "type": "string"
+    },
     "timestamp": {
       "type": "number"
     },
@@ -12,6 +15,6 @@
       "type": "object"
     }
   }, 
-    
+  "additionalProperties": false,
   "required":["name", "content"]
 }
