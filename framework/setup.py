@@ -23,6 +23,10 @@ TESTS_REQUIRED=[
 ]
 
 
+# The framwork directory path.
+FRAMEWORK_DIR = os.path.dirname(os.path.join(os.getcwd(), __file__))
+
+
 class DocCommand(Command):
     """Command to generate documentation."""
 
@@ -97,6 +101,15 @@ class DockerCommand(Command):
         subprocess.check_call(docker_cmd)
 
 
+def abspath(path):
+    """Get the absolute path of a file or a directory.
+
+    Args:
+      path (string): The path relative to framework directory.
+    """
+    return os.path.join(FRAMEWORK_DIR, path)
+
+
 def cp_static_files(static_files):
     """Copy files to static folder.
 
@@ -113,6 +126,7 @@ def cp_static_files(static_files):
             copy(static_file, static_dir)
             print('Copy {} into {}'.format(static_file, static_dir))
 
+
 def load_requirements():
     """Load requirements files."""
     requirements = []
@@ -126,15 +140,9 @@ def load_requirements():
 
 
 def main():
-    # Get the project root directory.
-    if 'JAGER_ROOT' in os.environ:
-        proj_root = os.environ['JAGER_ROOT']
-    else:
-        proj_root = os.path.join(os.getcwd(), '..')
-
     # Copy static files into framework library directory.
     cp_static_files([
-        os.path.join(proj_root, 'services/messaging.json')
+        abspath('../services/messaging.json')
     ])
 
     # Load the requirements.
