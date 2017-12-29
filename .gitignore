@@ -123,3 +123,6 @@ docs_output
 
 # npm
 node_modules
+
+# Copied static files in framework
+framework/jagereye/static

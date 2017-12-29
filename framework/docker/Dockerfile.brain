@@ -1,0 +1,36 @@
+FROM ubuntu:16.04
+# FROM fnndsc/ubuntu-python3
+
+MAINTAINER JiaKuan Su <feabries@gmail.com>
+
+ENV HOME /root
+
+WORKDIR $HOME
+
+# Install system packages.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        python3 \
+        python3-dev \
+        wget \
+        && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Get pip.
+RUN wget https://bootstrap.pypa.io/get-pip.py && \
+    python3 get-pip.py && \
+    rm get-pip.py
+
+# Install JagerEye framework library.
+# TODO(JiaKuan Su): Use .pyc only.
+WORKDIR jagereye
+COPY setup.py .
+COPY setup.cfg .
+COPY MANIFEST.in .
+COPY requirements.brain.txt .
+COPY jagereye jagereye
+RUN python3 setup.py install
+WORKDIR $HOME
+RUN rm -r jagereye

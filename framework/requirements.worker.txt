@@ -1,0 +1,6 @@
+asyncio-nats-client
+aioredis
+numpy
+six
+tensorflow
+tensorflow-gpu
