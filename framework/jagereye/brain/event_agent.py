@@ -4,6 +4,8 @@ import os
 
 from jsonschema import Draft4Validator as Validator
 from jagereye.brain.utils import jsonify
+from jagereye.util import logging
+
 
 # create a schema validator with a json file
 cuurent_path = os.path.dirname(__file__)
@@ -22,7 +24,12 @@ class EventAgent():
             event['analyzer_id'] = analyzer_id
 
     def store_in_db(self, events):
-        # TODO(Ray): error handler and logging
+        # validate
+        for event in events:
+            if not validator.is_valid(event):
+                logging.error('Fail validation for event {}'.format(event))
+                events.remove(event)
+        # TODO(Ray): error handler and logging if insert failed
         self._db[self._typename].insert_many(events)
 
     async def consume_from_worker(self, worker_id):
