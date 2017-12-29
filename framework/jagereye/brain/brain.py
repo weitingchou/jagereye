@@ -8,7 +8,6 @@ import time
 from jagereye.brain.utils import jsonify, jsondumps
 from jagereye.brain import ticket
 from jagereye.brain.event_agent import EventAgent
-
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
 from jagereye.util import logging
