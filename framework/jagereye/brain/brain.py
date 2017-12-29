@@ -5,19 +5,19 @@ from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 from pymongo import MongoClient
 import time
 
-from jagereye.util import logging
-from jagereye.util.generic import get_func_name
-
 from jagereye.brain.utils import jsonify, jsondumps
 from jagereye.brain import ticket
 from jagereye.brain.event_agent import EventAgent
 
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
+from jagereye.util import logging
+from jagereye.util import static_util
+from jagereye.util.generic import get_func_name
 
 # TODO(Ray): must merge to the STATUS enum in jagereye/worker/worker.py
 # Loading messaging
-with open('../../../services/messaging.json', 'r') as f:
+with open(static_util.get_path('messaging.json'), 'r') as f:
     MESSAGES = jsonify(f.read())
 
 # NATS channels
