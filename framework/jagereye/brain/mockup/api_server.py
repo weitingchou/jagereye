@@ -4,8 +4,11 @@ from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 import json
 import random
 
+from jagereye.util import static_util
+
+
 # Loading messaging
-with open('../../../../services/messaging.json', 'r') as f:
+with open(static_util.get_path('messaging.json'), 'r') as f:
     MESSAGES = json.loads(f.read())
 
 CH_API_TO_BRAIN = "ch_api_brain"

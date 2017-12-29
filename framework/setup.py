@@ -142,7 +142,7 @@ def load_requirements():
 def main():
     # Copy static files into framework library directory.
     cp_static_files([
-        abspath('../services/messaging.json')
+        abspath('../shared/messaging.json')
     ])
 
     # Load the requirements.
