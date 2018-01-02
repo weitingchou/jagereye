@@ -1,5 +1,4 @@
 FROM ubuntu:16.04
-# FROM fnndsc/ubuntu-python3
 
 MAINTAINER JiaKuan Su <feabries@gmail.com>
 
