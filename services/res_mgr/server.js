@@ -24,7 +24,7 @@ const WORKER_STATUS = {
 };
 
 // The Messaging format.
-const MESSAGING = JSON.parse(fs.readFileSync('../messaging.json', 'utf8'));
+const MESSAGING = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'));
 
 // Initialize NATS.
 const nats = NATS.connect({
