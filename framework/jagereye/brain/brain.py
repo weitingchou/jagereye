@@ -114,6 +114,7 @@ class Brain(object):
                 analyzer_id = anal_worker_id.split(':')[1]
                 # check worker status is HSHAKE-1?
                 worker_obj = jsonify(await self._mem_db_cli.get(anal_worker_id))
+
                 if worker_obj['status'] == WorkerStatus.HSHAKE_1.name:
                     # update worker status to READY
 
