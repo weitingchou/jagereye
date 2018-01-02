@@ -77,6 +77,7 @@ class Brain(object):
         # TODO(Ray): both are mem db operations, need to be abstracted, or redesign
         self._mem_db_cli = await aioredis.create_redis(self._mem_db_host, loop=self._main_loop)
         self._ticket = await ticket.create_ticket(self._main_loop)
+
         self._event_agent = EventAgent(self._typename, self._mem_db_cli, self._event_db)
         self._worker_agent = WorkerAgent(self._typename, self._mem_db_cli)
 
@@ -114,8 +115,9 @@ class Brain(object):
                 # change worker status
                 # TODO(Ray): check 'analyzer_id' in context, maybe need error handler
                 worker_id = context['workerID']
+                analyzer_id = context['analyzer_id']
                 # check worker status is HSHAKE-1?
-                worker_obj = await self._worker_agent.get_info_by_id(worker_id)
+                worker_obj = await self._worker_agent.get_info(worker_id=worker_id, analyzer_id=analyzer_id)
 
                 if worker_obj['status'] == WorkerStatus.HSHAKE_1.name:
                     # update worker status to READY
@@ -146,7 +148,8 @@ class Brain(object):
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
                 ticket_id = context['ticket']['ticket_id']
                 worker_id = context['workerID']
-                worker_obj = await self._worker_agent.get_info_by_id(worker_id)
+                analyzer_id = context['analyzer_id']
+                worker_obj = await self._worker_agent.get_info(worker_id=worker_id, analyzer_id=analyzer_id)
                 # check if  worker status is 'CONFIG'
                 if worker_obj['status'] == WorkerStatus.CONFIG.name:
                     # update the status to RUNNING
@@ -209,9 +212,10 @@ class Brain(object):
                 except Exception as e:
                     logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
                 else:
-                    worker_obj = await self._worker_agent.get_info_by_id(worker_id) 
+                    worker_obj = await self._worker_agent.get_info(worker_id=worker_id)
                     if worker_obj['status'] == WorkerStatus.INITIAL.name:
                         # update worker status
+                        context['analyzer_id'] = worker_obj['analyzer_id']
                         await self._worker_agent.update_status(worker_id, WorkerStatus.HSHAKE_1.name)
                         hshake_reply = {
                             'verb': 'hshake-2',
