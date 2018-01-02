@@ -8,7 +8,7 @@ const fs = require('fs')
 const analyzersRouter = express.Router()
 const analyzerRouter = express.Router()
 
-const msg = JSON.parse(fs.readFileSync('../messaging.json', 'utf8'))
+const msg = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'))
 const MAX_ENABLED_ANALYZERS = 16
 const NUM_OF_BRAINS = 1
 const DEFAULT_REQUEST_TIMEOUT = 3000
