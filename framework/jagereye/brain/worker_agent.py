@@ -58,33 +58,39 @@ class WorkerAgent(object):
         }
         return (await self._mem_db.set(anal_worker_id, str(worker_info)))
 
-    async def get_info_by_id(self, worker_id):
+    async def get_info(self, worker_id=None, analyzer_id=None):
         """Get worker info by worker id
 
         Args:
+            analyzer_id (string) analyzer_id
             worker_id (string): worker id
 
         Returns:
             dict: worker information
         """
-        # TODO(Ray): check 'result', error handler
-        result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
-        anal_worker_id = (result[0]).decode()
-        analyzer_id = anal_worker_id.split(':')[1]
+        anal_worker_id = None
+        if (worker_id and analyzer_id):
+            anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
+        elif worker_id:
+            # TODO(Ray): check 'result', error handler
+            result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
+            anal_worker_id = (result[0]).decode()
+            analyzer_id = anal_worker_id.split(':')[1]
+        elif analyzer_id:
+            # TODO(Ray): check 'result', error handler
+            result = await self._mem_db.keys('anal_worker:{}:*'.format(analyzer_id))
+            anal_worker_id = (result[0]).decode()
+            worker_id = anal_worker_id.split(':')[2]
+        else:
+            # TODO(Ray): if None, need error handler
+            return None
         worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
-        worker_obj['analyzer_id'] = analyzer_id
-        return worker_obj
-
-    async def get_info_by_anal_id(self, analyzer_id):
-        """Get worker by analyzer id.
-
-        Args:
-            analyzer_id (string): analyzer id
-
-        Returns:
-            dict: worker information
-        """
-        pass
+        if worker_obj:
+            worker_obj['analyzer_id'] = analyzer_id
+            worker_obj['worker_id'] = worker_id
+            return worker_obj
+        else:
+            return None
 
     async def get_anal_id(self, worker_id):
         """Get analyzer_id by worker_id.
