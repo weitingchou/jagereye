@@ -8,6 +8,7 @@ import time
 from jagereye.brain.utils import jsonify, jsondumps
 from jagereye.brain import ticket
 from jagereye.brain.event_agent import EventAgent
+from jagereye.brain.worker_agent import WorkerAgent
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
 from jagereye.util import logging
@@ -58,6 +59,7 @@ class Brain(object):
         
         self._ticket = None
         self._event_agent = None
+        self._worker_agent = None
 
         self._mem_db_cli = None
         self._mem_db_host = mem_db_host
@@ -76,6 +78,7 @@ class Brain(object):
         self._mem_db_cli = await aioredis.create_redis(self._mem_db_host, loop=self._main_loop)
         self._ticket = await ticket.create_ticket(self._main_loop)
         self._event_agent = EventAgent(self._typename, self._mem_db_cli, self._event_db)
+        self._worker_agent = WorkerAgent(self._typename, self._mem_db_cli)
 
         await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
         await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
@@ -108,20 +111,16 @@ class Brain(object):
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
                 logging.debug('finish handshake')
 
-                # change worker status in DB
-                # TODO(Ray): check 'anal_worker_id' in context, error handler
-                anal_worker_id = context['anal_worker_id']
-                analyzer_id = anal_worker_id.split(':')[1]
+                # change worker status
+                # TODO(Ray): check 'analyzer_id' in context, maybe need error handler
+                worker_id = context['workerID']
                 # check worker status is HSHAKE-1?
-                worker_obj = jsonify(await self._mem_db_cli.get(anal_worker_id))
+                worker_obj = await self._worker_agent.get_info_by_id(worker_id)
 
                 if worker_obj['status'] == WorkerStatus.HSHAKE_1.name:
                     # update worker status to READY
-
-                    worker_obj['status'] = WorkerStatus.READY.name
-                    # TODO(Ray): error handler for redis result
-                    await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
-
+                    await self._worker_agent.update_status(worker_id, WorkerStatus.READY.name)
+                    analyzer_id = worker_obj['analyzer_id']
                     # check if there is a ticket for the analyzer
                     result = await self._ticket.get(analyzer_id)
                     if result:
@@ -133,8 +132,7 @@ class Brain(object):
                             'context': context
                         }
                         # update worker status to CONFIG
-                        worker_obj['status'] = WorkerStatus.CONFIG.name
-                        await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
+                        await self._worker_agent.update_status(worker_id, WorkerStatus.CONFIG.name)
                         await self._nats_cli.publish(context['ch_to_worker'], str(config_req).encode())
                     else:
                         # no ticket for the analyzer
@@ -146,14 +144,13 @@ class Brain(object):
             elif verb == 'config_ok':
                 logging.debug('Received "config_ok" in {func}: "{subject} {reply}": {data}'.\
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
-                anal_worker_id = context['anal_worker_id']
                 ticket_id = context['ticket']['ticket_id']
-                worker_obj = jsonify(await self._mem_db_cli.get(anal_worker_id))
+                worker_id = context['workerID']
+                worker_obj = await self._worker_agent.get_info_by_id(worker_id)
                 # check if  worker status is 'CONFIG'
                 if worker_obj['status'] == WorkerStatus.CONFIG.name:
-                    worker_obj['status'] = WorkerStatus.RUNNING.name
                     # update the status to RUNNING
-                    await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
+                    await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name)
                     # delete ticket
                     await self._ticket.delete(ticket_id)
                 else:
@@ -162,15 +159,9 @@ class Brain(object):
                             format(get_func_name, worker_obj['status']))
             elif verb == 'event':
                 worker_id = context['workerID']
-
-                # TODO(Ray): worker table operation abstraction
-                anal_worker_id = await self._mem_db_cli.keys('anal_worker:*:{}'.format(worker_id))
-                anal_worker_id = str(anal_worker_id[0])
                 # retrieve analyzer_id
-                analyzer_id = anal_worker_id.split(':')[1]
-
+                analyzer_id = self._worker_agent.get_anal_id(worker_id)
                 logging.debug('Receive event inform in {}.'.format(get_func_name()))
-
                 # consume events from the worker
                 events = await self._event_agent.consume_from_worker(worker_id)
                 if not events:
@@ -218,20 +209,10 @@ class Brain(object):
                 except Exception as e:
                     logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
                 else:
-                    # get worker_obj
-                    # TODO(Ray): check 'result', error handler
-                    result = await self._mem_db_cli.keys('anal_worker:*:{}'.format(worker_id))
-                    anal_worker_id = (result[0]).decode()
-
-                    # check worker status is INITIAL?
-                    worker_obj = jsonify(await self._mem_db_cli.get(anal_worker_id))
+                    worker_obj = await self._worker_agent.get_info_by_id(worker_id) 
                     if worker_obj['status'] == WorkerStatus.INITIAL.name:
                         # update worker status
-                        worker_obj['status'] = WorkerStatus.HSHAKE_1.name
-                        # TODO(Ray): error handler for redis result
-                        await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
-
-                        context['anal_worker_id'] = anal_worker_id
+                        await self._worker_agent.update_status(worker_id, WorkerStatus.HSHAKE_1.name)
                         hshake_reply = {
                             'verb': 'hshake-2',
                             'context': context
@@ -242,7 +223,6 @@ class Brain(object):
                     else:
                         logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
                                 format(get_func_name(), worker_obj['status']))
-
 
     async def _api_handler(self, recv):
         """asychronous handler for listen cmd from api server
@@ -287,29 +267,21 @@ class Brain(object):
             # check if worker for the analyzer #id exists?
             # if yes, just re-config worker
             # if no, request resource manager for launching a worker
-            worker_res = await self._mem_db_cli.keys('anal_worker:{}:*'.format(analyzer_id))
-            if worker_res:
+            if (await self._worker_agent.is_existed(analyzer_id)):
                 # TODO(Ray): if yes, just re-config worker
                 logging.debug('worker exists, re-configure it')
             else:
                 # no worker, request resource manager for launching a new worker
-
-                worker_state = WorkerStatus.CREATE.name
-
-                # create an placeholder entry in worker table
-                anal_worker_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
-                worker_obj = {
-                    'status': worker_state,
-                    'last_hbeat': timestamp,
-                    'pipelines': []
-                }
-                await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
-                logging.debug('Create a worker "placeholder" for analyzer "{}"'.format(analyzer_id))
-
+                if not (await self._worker_agent.create_worker(analyzer_id)):
+                    logging.debug('Create a worker failed for analyzer "{}" in {}'.format(analyzer_id, get_func_name()))
+                    return
+                logging.debug('Create a worker for analyzer "{}"'.format(analyzer_id))
                 # reply back to api_server
-                status_obj = { 'result': self._API.anal_status_obj(worker_state) }
+                status_obj = { 'result': self._API.anal_status_obj(WorkerStatus.CREATE.name) }
+                # TODO(Ray): need to abstract
                 await self._nats_cli.publish(reply, jsondumps(status_obj).encode())
 
+                ticket_id = ticket.gen_key(analyzer_id)
                 # request resource manager to launch a worker
                 req = {
                     'command': MESSAGES['ch_brain_res']['CREATE_WORKER'],
@@ -321,6 +293,7 @@ class Brain(object):
                         'workerName': 'jagereye/worker_tripwire'
                     }
                 }
+                # need to abstract
                 await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
 
         elif msg['command'] == MESSAGES['ch_api_brain']['STOP_ANALYZER']:
@@ -331,9 +304,7 @@ class Brain(object):
                 # because we allow only one ticket for one write operation of the
                 # same analyzer at the same time
                 return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_aval()).encode())
-
             await self._nats_cli.publish(reply, str("It is stoping").encode())
-
         else:
             logging.error('Undefined command: {}'.format(msg['command']))
 
@@ -361,22 +332,10 @@ class Brain(object):
             worker_id = msg['response']['workerId']
             analyzer_id = msg['ticketId']   # we use analyzer ID as ticket ID
 
-            logging.info('Launch worker "{}" for analyzer "{}"'.format(worker_id, analyzer_id))
-
-            # update the anal_worker record:
-            # retrieve the original anal_worker record
-            # TODO(Ray): confirm that the result must have 1 element
-            ori_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
-            worker_obj = jsonify(await self._mem_db_cli.get(ori_id))
-            anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
-            # change status
-            worker_obj['status'] = WorkerStatus.INITIAL.name
-
-            # append a new anal_worker record with worker_id
-            await self._mem_db_cli.set(anal_worker_id, str(worker_obj))
-
-            # delete the original record
-            await self._mem_db_cli.delete(ori_id)
+            logging.info('Receive launch ok in {} for worker "{}":analyzer "{}"'.
+                    format(get_func_name(), worker_id, analyzer_id))
+            await self._worker_agent.update_worker_id(analyzer_id, worker_id)
+            await self._worker_agent.update_status(worker_id, WorkerStatus.INITIAL.name)
 
     def start(self):
         self._main_loop.run_until_complete(self._setup())
