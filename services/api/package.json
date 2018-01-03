@@ -5,6 +5,7 @@
   "description": "",
   "main": "",
   "scripts": {
+      "start": "NODE_ENV='$JAGERENV' node server.js"
   },
   "repository": "",
   "keywords": [],
