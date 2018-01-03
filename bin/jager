@@ -1,0 +1,272 @@
+#!/bin/bash
+#
+# A command-line tool for JagerEeye
+
+set -o errexit
+
+readonly VERSION="0.0.1"
+readonly BUILD_FOLDER="${JAGERROOT}/build"
+
+jager::main_usage() {
+    echo "
+USAGE: jager COMMAND [arg...]
+       jager [ -h | --help | -v | --version ]
+
+Command line tool for JagerEye
+
+Options:
+    -h, --help      Show this screen
+    -v, --version   Print version information and quit
+
+Commands:
+    build           Build docker images
+    info            Display system-wide information
+    install         Install framework
+    start           Start services and applications
+
+Run 'jager COMMAND --help' for more information on a command.
+
+[NOTE] Please make sure the docker daemon is up and running before starting.
+"
+}
+
+jager::error() {
+    echo -e "\033[0;31mERROR\033[0m: ${1}"
+    exit 1
+}
+
+jager::reset_build_folder() {
+    rm -rf ${BUILD_FOLDER}
+    mkdir ${BUILD_FOLDER}
+}
+
+jager::build() {
+    local usage="
+USAGE: jager build TARGET [OPTIONS]
+
+Build JagerEye docker images
+
+This command is equivalent to command 'docker-compose build'.
+
+Options:
+    -*, --*         Please reference the 'Options' section from 'docker-compose build --help'
+
+Targets:
+    all             Build all targets (default)
+    services        Only build services
+    apps            Only build applications
+    "
+    local target="all"
+    local args=""
+
+    if (( $# > 0 )); then
+        target=${1}
+        case "${target}" in
+            all|services|apps)
+                shift
+                ;;
+            -h|--help)
+                echo "${usage}"
+                exit 0
+                ;;
+            *)
+                jager::error "Invalid target: ${target}
+                ${usage}"
+                ;;
+        esac
+
+        while (( $# > 0 ))
+        do
+            args="${args} ${1}"
+            shift
+        done
+    fi
+
+    jager::reset_build_folder
+
+    if [ "${target}" == "all" ]; then
+        jager::build_all "${args}"
+    elif [ "${target}" == "services" ]; then
+        jager::build_services "${args}"
+    elif [ "${target}" == "apps" ]; then
+        jager::build_apps "${args}"
+    fi
+}
+
+jager::prepare_build_services() {
+    jager::show_info
+
+    cd ${BUILD_FOLDER}
+
+    # Prepare build folder for services
+    cp -r ${JAGERROOT}/services .
+    cp -r ${JAGERROOT}/shared .
+
+    # Copy shared files to each service folder
+    local src_config_file="${BUILD_FOLDER}/services/config.${JAGERENV}.yml"
+    local shared_folder="${BUILD_FOLDER}/shared"
+    if [ ! -f ${src_config_file} ]; then
+        jager::error "Config file '${src_config_file}' was not found!"
+    fi
+    ln -s ${src_config_file} ${BUILD_FOLDER}/services/config.yml
+    # TODO: Do more fine-grained control about which shared file is required
+    #       by which service
+    local service_list=$(ls -d ./services/*/)
+    for service in ${service_list}; do
+        # XXX: It's ugly, but currently there is no way to copy/add files outside
+        #      the build context in Dockerfile, even for symbolic linked files, ie.,
+        #      can't write something like 'COPY ../some_file .'
+        #      For more details, please read https://github.com/moby/moby/issues/18789
+        cp ${src_config_file} ${service}config.yml
+        cp ${shared_folder}/* ${service}
+    done
+
+    python3 ${JAGERROOT}/deploy/docker_gen.py --workdir=${BUILD_FOLDER} services
+}
+
+jager::build_services() {
+    local args="${1}"
+    jager::prepare_build_services
+    cd ${BUILD_FOLDER}
+    echo "Run 'docker-compose build ${args}'"
+    docker-compose build ${args}
+}
+
+jager::build_apps() {
+    jager::show_info
+
+    cd ${BUILD_FOLDER}
+
+    # Build framework
+    echo "Building framework..."
+    cp -r ${JAGERROOT}/framework .
+    cd framework
+    python3 setup.py docker
+
+    # Build apps
+    echo "Building applications..."
+}
+
+jager::start() {
+    local usage="
+USAGE: jager start TARGET [OPTIONS]
+
+Start JagerEye docker containers.
+
+This command is equivalent to command 'docker-compose up'.
+
+Unless the docker images are already existed, this command also builds any missed images.
+
+If there is any change being made to the service source code, one must re-build the images
+by running 'jager build TARGET', otherwise, this command will pick up the old images to
+start, since it only runs build for images that doesn't exist.
+
+Options:
+    -*, --*         Please reference the 'Options' section from 'docker-compose up --help'
+
+Targets:
+    all             Start all targets (default)
+    services        Only build services
+    apps            Only build applications
+    "
+    local target="all"
+    local args=""
+
+    if (( $# > 0 )); then
+        target=${1}
+        case "${target}" in
+            all|services|apps)
+                shift
+                ;;
+            -h|--help)
+                echo "${usage}"
+                exit 0
+                ;;
+            *)
+                jager::error "Invalid target: ${target}
+                ${usage}"
+                ;;
+        esac
+
+        while (( $# > 0 ))
+        do
+            args="${args} ${1}"
+            shift
+        done
+    fi
+
+    jager::reset_build_folder
+
+    if [ "${target}" == "all" ]; then
+        jager::start_all "${args}"
+    elif [ "${target}" == "services" ]; then
+        jager::start_services "${args}"
+    elif [ "${target}" == "apps" ]; then
+        jager::start_apps "${args}"
+    fi
+}
+
+jager::start_services() {
+    local args="${1}"
+    jager::prepare_build_services "${BUILD_FOLDER}"
+    cd ${BUILD_FOLDER}
+    echo "Run 'docker-compose up ${args}'"
+    docker-compose up ${args}
+}
+
+jager::show_info() {
+    echo "
+Environment Variables:
+    JAGERROOT: ${JAGERROOT}
+    JAGERENV: ${JAGERENV}
+    "
+}
+
+jager::show_version() {
+    echo "Jager version ${VERSION}"
+}
+
+#########################
+# Sanity Check
+#########################
+
+if [ "${JAGERROOT}" == "" ]; then
+    jager::error "Environment variable 'JAGERROOT' is not defined!"
+fi
+if [ ! "${JAGERENV}" == "" ]; then
+    if [ "${JAGERENV}" != "product" ] && [ "${JAGERENV}" != "development" ] && [ "${JAGERENV}" != "test" ]; then
+        jager::error " Invalid value of environment variable 'JAGERENV': ${JAGERENV}.
+        The value should be one of the following: 'product', 'development', 'test'."
+    fi
+else
+    export JAGERENV=product
+fi
+
+#########################
+# Main
+#########################
+
+if [ "$#" == "0" ]; then
+    jager::main_usage
+    exit 1
+fi
+
+opt=${1}
+shift
+case "${opt}" in
+    build)
+        jager::build "${@}"
+        ;;
+    start)
+        jager::start "${@}"
+        ;;
+    info)
+        jager::show_info
+        ;;
+    -v|--version)
+        jager::show_version
+        ;;
+    *)
+        jager::main_usage
+        ;;
+esac
