@@ -4,5 +4,4 @@ FROM redis:4.0.6
 # start cmd: docker run jager-redis:1.0.0
 MAINTAINER uniray7 uniray7@gmail.com
 
-EXPOSE 6379
 CMD ["redis-server", "--appendonly", "yes"]
