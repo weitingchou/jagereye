@@ -35,10 +35,7 @@ class WorkerAgent(object):
             return False
 
     async def create_worker(self, analyzer_id):
-        """Create initially a worker record 
-
-        create a worker record with $worker_id='placeholder' in mem_db 
-        before get worker_id from resource manager;
+        """Create a initial worker record
 
         Args:
             analyzer_id (string): analyzer id
@@ -62,7 +59,7 @@ class WorkerAgent(object):
         """Get worker info by worker id
 
         Args:
-            analyzer_id (string) analyzer_id
+            analyzer_id (string): analyzer_id
             worker_id (string): worker id
 
         Returns:
@@ -82,7 +79,8 @@ class WorkerAgent(object):
             anal_worker_id = (result[0]).decode()
             worker_id = anal_worker_id.split(':')[2]
         else:
-            # TODO(Ray): if None, need error handler
+            # TODO(Ray): if both worker_id and analyzer_id are implicit false (like None, empty str, [], {})
+            #           ,need error handler
             return None
         worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
         if worker_obj:
@@ -93,7 +91,7 @@ class WorkerAgent(object):
             return None
 
     async def get_anal_id(self, worker_id):
-        """Get analyzer_id by worker_id.
+        """Get analyzer ID by worker ID.
 
         Args:
             worker_id (string): worker id
@@ -112,7 +110,8 @@ class WorkerAgent(object):
 
         Args:
             worker_id (string): worker id
-            status (string): 'create', 'initial', 'hshake_1', 'config', 'ready', 'running'
+            status (string): The new worker status.
+                The status should be 'create', 'initial', 'hshake_1', 'config', 'ready' or 'running'.
 
         Returns:
             bool: True for success, False otherwise
@@ -133,11 +132,11 @@ class WorkerAgent(object):
         Returns:
             bool: True for success, False otherwise
         """
+        # TODO(Ray)
         pass
 
     async def update_worker_id(self, analyzer_id, worker_id):
-        """Update the worker id to the worker record, replace the 'placeholder' 
-        after brain receive the worker id from resource manager
+        """Update the worker id to the worker record
 
         Args:
             analyzer_id (string): analyzer id
