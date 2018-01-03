@@ -108,7 +108,11 @@ class Worker(object):
                         'source': ticket['params']['source'],
                         'pipelines': ticket['params']['pipelines']
                         }
-                self._main_loop.run_in_executor(self._executor, self.pipeline, pipeline_params)
+                self._main_loop.run_in_executor(self._executor,
+                                                self.pipeline,
+                                                pipeline_params,
+                                                self._files_dir,
+                                                self.send_event)
                 # response ok back to brain
                 config_reply = {
                         'verb': 'config_ok',
