@@ -56,7 +56,7 @@ class WorkerAgent(object):
         return (await self._mem_db.set(anal_worker_id, str(worker_info)))
 
     async def get_info(self, worker_id=None, analyzer_id=None):
-        """Get worker info by worker id
+        """Get worker info by worker ID or analyzer ID
 
         Args:
             analyzer_id (string): analyzer_id
