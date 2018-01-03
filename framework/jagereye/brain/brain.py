@@ -297,7 +297,7 @@ class Brain(object):
                         'workerName': 'jagereye/worker_tripwire'
                     }
                 }
-                # need to abstract
+                #TODO(Ray) need to abstract
                 await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
 
         elif msg['command'] == MESSAGES['ch_api_brain']['STOP_ANALYZER']:
