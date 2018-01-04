@@ -103,7 +103,16 @@ class Worker(object):
                 # but it has check in register_pipeline()
                 # use the thread pool to run object detect
                 # TODO(Ray): need to confirm the app is enabled correctly
-                self._main_loop.run_in_executor(self._executor, self.pipeline)
+                ticket = context['ticket']['msg']
+                pipeline_params = {
+                        'source': ticket['params']['source'],
+                        'pipelines': ticket['params']['pipelines']
+                        }
+                self._main_loop.run_in_executor(self._executor,
+                                                self.pipeline,
+                                                pipeline_params,
+                                                self._files_dir,
+                                                self.send_event)
                 # response ok back to brain
                 config_reply = {
                         'verb': 'config_ok',

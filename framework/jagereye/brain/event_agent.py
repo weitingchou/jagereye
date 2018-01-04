@@ -6,7 +6,6 @@ from jsonschema import Draft4Validator as Validator
 from jagereye.brain.utils import jsonify
 from jagereye.util import logging
 
-
 # create a schema validator with a json file
 cuurent_path = os.path.dirname(__file__)
 schema_path = os.path.join(cuurent_path, 'schema/event.json')
@@ -18,7 +17,6 @@ class EventAgent(object):
         self._typename = typename
         self._mem_db = mem_db
         self._db = db
-
 
     def store_in_db(self, events, analyzer_id):
         # validate
