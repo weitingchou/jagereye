@@ -1,1 +1,2 @@
 include jagereye/static/*
+include jagereye/brain/schema/*
