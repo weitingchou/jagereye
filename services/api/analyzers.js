@@ -4,9 +4,7 @@ const httpError = require('http-errors')
 const models = require('./database')
 const NATS = require('nats')
 const fs = require('fs')
-
-const analyzersRouter = express.Router()
-const analyzerRouter = express.Router()
+const router = express.Router()
 
 const msg = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'))
 const MAX_ENABLED_ANALYZERS = 16
@@ -387,27 +385,20 @@ function deleteAnalyzerRuntime(req, res, next) {
 /*
  * Routing Table
  */
-analyzersRouter.get('/', getAllAnalyzerConfig)
-analyzersRouter.post('/', postReqValidator,  createAnalyzerConfig)
-analyzersRouter.delete('/', deleteAllAnalyzers)
+router.get('/analyzers', getAllAnalyzerConfig)
+router.post('/analyzers', postReqValidator,  createAnalyzerConfig)
+router.delete('/analyzers', deleteAllAnalyzers)
 
-analyzerRouter.get('/:id', getAnalyzerConfig)
-analyzerRouter.patch('/:id', updateAnalyzerConfig)
-analyzerRouter.delete('/:id', deleteAnalyzer)
-analyzerRouter.get('/:id/source', getAnalyzerSourceConfig)
-analyzerRouter.patch('/:id/source', updateAnalyzerSourceConfig)
-analyzerRouter.get('/:id/pipelines', getAnalyzerPipelineConfig)
-analyzerRouter.patch('/:id/pipelines', updateAnalyzerPipelineConfig)
-analyzerRouter.get('/:id/runtime', getAnalyzerRuntime)
-analyzerRouter.post('/:id/runtime', createAnalyzerRuntime)
-analyzerRouter.patch('/:id/runtime', updateAnalyzerRuntime)
-analyzerRouter.delete('/:id/runtime', deleteAnalyzerRuntime)
+router.get('/analyzer/:id', getAnalyzerConfig)
+router.patch('/analyzer/:id', updateAnalyzerConfig)
+router.delete('/analyzer/:id', deleteAnalyzer)
+router.get('/analyzer/:id/source', getAnalyzerSourceConfig)
+router.patch('/analyzer/:id/source', updateAnalyzerSourceConfig)
+router.get('/analyzer/:id/pipelines', getAnalyzerPipelineConfig)
+router.patch('/analyzer/:id/pipelines', updateAnalyzerPipelineConfig)
+router.get('/analyzer/:id/runtime', getAnalyzerRuntime)
+router.post('/analyzer/:id/runtime', createAnalyzerRuntime)
+router.patch('/analyzer/:id/runtime', updateAnalyzerRuntime)
+router.delete('/analyzer/:id/runtime', deleteAnalyzerRuntime)
 
-function addTo(app) {
-    app.use('/analyzers', analyzersRouter)
-    app.use('/analyzer', analyzerRouter)
-}
-
-module.exports = {
-    addTo: addTo
-}
+module.exports = router

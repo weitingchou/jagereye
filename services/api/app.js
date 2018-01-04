@@ -11,7 +11,8 @@ app.use(bodyParser.urlencoded({ extended: false }))
 app.use(expressValidator())
 
 // Initialize API
-analyzers.addTo(app)
+const API_ENTRY='/api/v1'
+app.use(API_ENTRY, analyzers)
 
 // Logging errors
 app.use((err, req, res, next) => {
