@@ -1,0 +1,43 @@
+---
+version: "2"
+services:
+    api:
+        build: "{{api.buildpath}}"
+        image: "jagereye/api:{{api.version}}"
+        ports:
+            {%- for key, port in api.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        depends_on:
+            - database
+            - messaging
+            - mem_db
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    database:
+        build: "{{database.buildpath}}"
+        image: "jagereye/database:{{database.version}}"
+        ports:
+            {%- for key, port in database.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    messaging:
+        build: "{{messaging.buildpath}}"
+        image: "jagereye/messaging:{{messaging.version}}"
+        ports:
+            {%- for key, port in messaging.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    mem_db:
+        build: "{{mem_db.buildpath}}"
+        image: "jagereye/mem_db:{{mem_db.version}}"
+        ports:
+            {%- for key, port in mem_db.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
