@@ -55,7 +55,7 @@ def normalize_color(color):
     return (norms[0], norms[1], norms[2])
 
 
-def worker_fn(context):
+def worker_fn(context, file_dir, send_event_fn):
     """The main worker function"""
     send_event = context['send_event']
     files_dir = context['files_dir']
