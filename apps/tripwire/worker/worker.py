@@ -55,11 +55,9 @@ def normalize_color(color):
     return (norms[0], norms[1], norms[2])
 
 
-def worker_fn(context, file_dir, send_event_fn):
+def worker_fn(params, files_dir, send_event):
     """The main worker function"""
-    send_event = context['send_event']
-    files_dir = context['files_dir']
-    config = context['config']
+    config = params['pipelines'][0]
 
     cap_interval = 1000.0 / FPS
     reserved_count = FPS * RESERVED_SECONDS
@@ -67,8 +65,14 @@ def worker_fn(context, file_dir, send_event_fn):
     ckpt_path = get_ckpt_path(MODEL_NAME)
     normal_color = normalize_color(NORMAL_COLOR)
     alert_color = normalize_color(ALERT_COLOR)
-    src = config['src']
+    src = params['source']['url']
     region = config['region']
+    region_tuple = (
+        region[0]['x'],
+        region[0]['y'],
+        region[1]['x'],
+        region[1]['y']
+    )
     triggers = config['triggers']
 
     pipeline = Pipeline(cap_interval=cap_interval)
@@ -77,10 +81,10 @@ def worker_fn(context, file_dir, send_event_fn):
             .pipe(MotionDetectionModule()) \
             .pipe(ObjectDetectionModule(ckpt_path)) \
             .pipe(InRegionDetectionModule(category_index,
-                                          region,
+                                          region_tuple,
                                           triggers)) \
             .pipe(TripwireModeModule(reserved_count=reserved_count)) \
-            .pipe(DrawTripwireModule(region, normal_color, alert_color)) \
+            .pipe(DrawTripwireModule(region_tuple, normal_color, alert_color)) \
             .pipe(VideoRecordModule(files_dir,
                                     reserved_count,
                                     FPS,
@@ -106,7 +110,7 @@ def _send_event(name, timestamp, content):
                  ', content: "{}"'.format(name, timestamp, content))
 
 
-def main(worker_id, standalone = False, config=None):
+def main(worker_id, standalone = False, params=None):
     if not standalone:
         worker = Worker(WORKER_NAME, worker_id)
         worker.register_pipeline(worker_fn)
@@ -114,12 +118,7 @@ def main(worker_id, standalone = False, config=None):
     else:
         files_dir = os.path.join('~/jagereye_shared', WORKER_NAME, worker_id)
         files_dir = os.path.expanduser(files_dir)
-        context = {
-            'send_event': _send_event,
-            'files_dir': files_dir,
-            'config': config
-        }
-        worker_fn(context)
+        worker_fn(params, files_dir, _send_event)
 
 
 if __name__ == '__main__':
@@ -150,7 +149,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.standalone:
-        config = None
+        params = None
     else:
         # Handle arguments for standalone mode.
         # Check the required arguments for standalone mode.
@@ -162,14 +161,24 @@ if __name__ == '__main__':
         p_list = list(map(int, p_list))
         if len(p_list) != 4:
             parser.error('Format for --region: xmin,ymin,xmax,ymax')
-        region = tuple(p_list)
+        region = [{
+            'x': p_list[0],
+            'y': p_list[1]
+        }, {
+            'x': p_list[2],
+            'y': p_list[3]
+        }]
         # Parse the triggers.
         triggers = args.triggers.split(',')
-        # Construct the config for standalone mode.
-        config = {
-            'src': args.src,
-            'region': region,
-            'triggers': triggers
+        # Construct the parameters for standalone mode.
+        params = {
+            'source': {
+                'url': args.src
+            },
+            'pipelines': [{
+                'region': region,
+                'triggers': triggers
+            }]
         }
 
-    main(args.id, standalone=args.standalone, config=config)
+    main(args.id, standalone=args.standalone, params=params)
