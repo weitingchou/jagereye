@@ -71,7 +71,7 @@ class Services(Base):
     def run(self):
         # Load template
         tempfile = os.path.join(self._rootdir,
-                                'deploy/templates/docker-compose.services.temp')
+                                'deploy/templates/docker-compose.services.jin')
         with open(tempfile, 'r') as f:
             tempfile = f.read()
         self._template = jinja2.Template(tempfile)
