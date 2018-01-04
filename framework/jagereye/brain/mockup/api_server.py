@@ -28,23 +28,24 @@ async def run(loop):
     #sid = yield from nc.subscribe(CHANNEL_NAME, cb=message_handler)
     anal_id = 'cam{}'.format(str(random.randint(0, 10000)))
 
-    request =   { 
-            "command": MESSAGES['ch_api_brain']['START_APPLICATION'],
+    request = {
+            "command": MESSAGES['ch_api_brain']['START_ANALYZER'],
             "params": {
-                "camera": {
-                    "id": anal_id,
-                    "protocol": "rtsp",
-                    "host": "rtsp://cam123",
-                    "port": "123",
-                    "path": "stream1"
+                "id": anal_id,
+                "type": "tripwire",
+                "source":{
+                    "mode": "stream",
+                    "url": "rtsp://cam123"
                     },
-                "application": {
-                    "name": "tripwire",
-                    "params": {
-                        "region": [],
-                        "triggers": []
+                "pipelines": [
+                    {
+                        "name": "tripwire",
+                        "params": {
+                            "region": [],
+                            "triggers": []
                         }
                     }
+                    ]
                 }
             }
 

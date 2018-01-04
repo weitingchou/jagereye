@@ -56,5 +56,5 @@ class Ticket():
         Returns:
             the number of tickets that were removed
         """
-        ket = gen_key(id)
+        key = gen_key(id)
         return await self._memdb.execute('del', key)
