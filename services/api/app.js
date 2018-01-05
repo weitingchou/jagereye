@@ -1,11 +1,13 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const expressValidator = require('express-validator')
+const cors = require('cors')
 
 const analyzers = require('./analyzers')
 
 const app = express()
 
+app.use(cors({ optionsSuccessStatus: 200 /* some legacy browsers (IE11, various SmartTVs) choke on 204 */ }))
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
 app.use(expressValidator())
