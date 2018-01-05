@@ -57,7 +57,7 @@ def normalize_color(color):
 
 def worker_fn(params, files_dir, send_event):
     """The main worker function"""
-    config = params['pipelines'][0]
+    config = params['pipelines'][0]['params']
 
     cap_interval = 1000.0 / FPS
     reserved_count = FPS * RESERVED_SECONDS
@@ -176,8 +176,10 @@ if __name__ == '__main__':
                 'url': args.src
             },
             'pipelines': [{
-                'region': region,
-                'triggers': triggers
+                'params': {
+                    'region': region,
+                    'triggers': triggers
+                }
             }]
         }
 
