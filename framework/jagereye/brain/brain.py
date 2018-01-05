@@ -294,7 +294,7 @@ class Brain(object):
                         # TODO: For running multiple brain instances, the id
                         #       should combine with a brain id to create a
                         #       unique id across brains
-                        'workerName': 'jagereye/worker_tripwire'
+                        'workerName': 'jagereye/worker_{}'.format(self._typename)
                     }
                 }
                 #TODO(Ray) need to abstract
