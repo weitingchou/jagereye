@@ -7,8 +7,8 @@ from jagereye.brain.utils import jsonify
 from jagereye.util import logging
 
 # create a schema validator with a json file
-cuurent_path = os.path.dirname(__file__)
-schema_path = os.path.join(cuurent_path, 'schema/event.json')
+current_path = os.path.dirname(__file__)
+schema_path = os.path.join(current_path, 'schema/event.json')
 schema = json.load(open(schema_path))
 validator = Validator(schema)
 
@@ -27,8 +27,11 @@ class EventAgent(object):
                 logging.error('Fail validation for event {}'.format(event))
             else:
                 valid_events.append(event)
-        # TODO(Ray): error handler and logging if insert failed
-        self._db[self._typename].insert_many(valid_events)
+        if valid_events:
+            # TODO(Ray): error handler and logging if insert failed
+            return self._db.insert_many(valid_events)
+        else:
+            return
 
     async def consume_from_worker(self, worker_id):
         """Get event array by worker ID.
@@ -41,7 +44,6 @@ class EventAgent(object):
         """
         # Construct the key of event queue.
         event_queue_key = 'event:brain:{}'.format(worker_id)
-        
         # Get the events.
         #TODO(Ray): I think if it need a redis lock for these 2 redis operation
         events_bin = await self._mem_db.lrange(event_queue_key, 0, -1)
@@ -50,6 +52,8 @@ class EventAgent(object):
         # Convert the events from binary to dictionary type.
         events = []
         for event_bin in events_bin:
-            events.append(jsonify(event_bin))
+            event_dict = jsonify(event_bin)
+            event_dict['timestamp'] = int(event_dict['timestamp'])
+            events.append(event_dict)
         return events
 

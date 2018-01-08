@@ -4,7 +4,7 @@ from jagereye.brain.utils import jsonify, jsondumps
 def gen_key(id):
     return 'ticket:{}'.format(id)
 
-class Ticket():
+class TicketAgent():
     def __init__(self, mem_db):
         self._mem_db = mem_db
 
@@ -18,7 +18,11 @@ class Ticket():
             a dict object of ticket content
         """
         key = gen_key(id)
-        return jsonify(await self._mem_db.get(key))
+        result = await self._mem_db.get(key)
+        if result:
+            return jsonify(result)
+        else:
+            return
 
     async def set(self, id, context):
         """Set ticket.
