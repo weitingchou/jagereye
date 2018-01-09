@@ -3,16 +3,15 @@ import json, os, time
 from jsonschema import Draft4Validator as Validator
 
 from jagereye.util import logging
+from jagereye.util import static_util
 from jagereye.util.generic import get_func_name
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.utils import jsonify
 
 
-# create a schema validator with a json file
-cuurent_path = os.path.dirname(__file__)
-schema_path = os.path.join(cuurent_path, 'schema/worker.json')
-schema = json.load(open(schema_path))
-validator = Validator(schema)
+# create worker schema validator
+with open(static_util.get_path('worker.json'), 'r') as f:
+    validator = Validator(json.loads(f.read()))
 
 class WorkerAgent(object):
     def __init__(self, typename, mem_db):

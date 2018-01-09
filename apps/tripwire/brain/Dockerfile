@@ -3,12 +3,18 @@ FROM jagereye/brain
 MAINTAINER JiaKuan Su <feabries@gmail.com>
 
 ENV HOME /root
-ENV FILES_DIR apps/tripwire/brain
+ENV APP_DIR ${HOME}/jagereye/apps/tripwire/brain
 
 WORKDIR ${HOME}
 
-# Copy files about tripwire brain.
-# TODO(JiaKuan Su): Use .pyc only.
-COPY ${FILES_DIR}/brain.py .
+# Create project strcture
+RUN mkdir -p ${APP_DIR}
 
-CMD python3 brain.py
+# Copy application files.
+# TODO(JiaKuan Su): Use .pyc only.
+COPY brain.py ${APP_DIR}
+
+WORKDIR ${APP_DIR}
+
+ENTRYPOINT ["python3"]
+CMD ["brain.py"]
