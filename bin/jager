@@ -21,7 +21,7 @@ Options:
 Commands:
     build           Build docker images
     info            Display system-wide information
-    install         Install framework
+    install         Install framework to system without building docker images
     start           Start services and applications
 
 Run 'jager COMMAND --help' for more information on a command.
@@ -33,11 +33,6 @@ Run 'jager COMMAND --help' for more information on a command.
 jager::error() {
     echo -e "\033[0;31mERROR\033[0m: ${1}"
     exit 1
-}
-
-jager::reset_build_folder() {
-    rm -rf ${BUILD_FOLDER}
-    mkdir ${BUILD_FOLDER}
 }
 
 jager::build() {
@@ -52,9 +47,14 @@ Options:
     -*, --*         Please reference the 'Options' section from 'docker-compose build --help'
 
 Targets:
-    all             Build all targets (default)
-    services        Only build services
+    all             Build all targets without base images (Note: it does NOT take any arguments) (default)
     apps            Only build applications
+    appbase         Only build application base images (Note: it does NOT take any arguments)
+    services        Only build services
+
+[NOTE] 1. 'apps', including the apps part in 'all', is built by 'docker' instead of 'docker-compose', so beware of
+          the use of arguments.
+       2. Make sure you have the base images built before building apps/services images.
     "
     local target="all"
     local args=""
@@ -62,7 +62,7 @@ Targets:
     if (( $# > 0 )); then
         target=${1}
         case "${target}" in
-            all|services|apps)
+            all|apps|appbase|services)
                 shift
                 ;;
             -h|--help)
@@ -82,33 +82,57 @@ Targets:
         done
     fi
 
-    jager::reset_build_folder
-
     if [ "${target}" == "all" ]; then
+        jager::prepare_build apps services
         jager::build_all "${args}"
-    elif [ "${target}" == "services" ]; then
-        jager::build_services "${args}"
     elif [ "${target}" == "apps" ]; then
+        jager::prepare_build apps
         jager::build_apps "${args}"
+    elif [ "${target}" == "appbase" ]; then
+        jager::prepare_build framework
+        jager::build_appbase
+    elif [ "${target}" == "services" ]; then
+        jager::prepare_build services
+        jager::build_services "${args}"
     fi
 }
 
-jager::prepare_build_services() {
+jager::prepare_build() {
+    local targets="${@}"
     jager::show_info
+
+    # Reset build folder
+    rm -rf ${BUILD_FOLDER}
+    mkdir ${BUILD_FOLDER}
 
     cd ${BUILD_FOLDER}
 
-    # Prepare build folder for services
-    cp -r ${JAGERROOT}/services .
+    # Copy shared files to build folder
     cp -r ${JAGERROOT}/shared .
 
-    # Copy shared files to each service folder
-    local src_config_file="${BUILD_FOLDER}/services/config.${JAGERENV}.yml"
-    local shared_folder="${BUILD_FOLDER}/shared"
+    # Create a symbolic link, named 'services.yml', for service config file, and it will be used for:
+    # 1) deploy/docker_gen.py, which will look for 'services.yml' to generate docker-compose.yml.
+    # 2) When building 'appbase', framework/setup.py will copy 'services.yml' to framework static folder.
+    local src_config_file="${BUILD_FOLDER}/shared/services.${JAGERENV}.yml"
     if [ ! -f ${src_config_file} ]; then
         jager::error "Config file '${src_config_file}' was not found!"
     fi
-    ln -s ${src_config_file} ${BUILD_FOLDER}/services/config.yml
+    ln -s ${src_config_file} ${BUILD_FOLDER}/shared/services.yml
+
+    # Copy target files to build folder
+    for target in ${targets}
+    do
+        cp -r ${JAGERROOT}/${target} .
+    done
+}
+
+jager::build_services() {
+    local args="${1}"
+
+    cd ${BUILD_FOLDER}
+
+    # Copy shared files to each service folder
+    local shared_folder="${BUILD_FOLDER}/shared"
     # TODO: Do more fine-grained control about which shared file is required
     #       by which service
     local service_list=$(ls -d ./services/*/)
@@ -117,34 +141,34 @@ jager::prepare_build_services() {
         #      the build context in Dockerfile, even for symbolic linked files, ie.,
         #      can't write something like 'COPY ../some_file .'
         #      For more details, please read https://github.com/moby/moby/issues/18789
-        cp ${src_config_file} ${service}config.yml
         cp ${shared_folder}/* ${service}
     done
 
-    python3 ${JAGERROOT}/deploy/docker_gen.py --workdir=${BUILD_FOLDER} services
-}
-
-jager::build_services() {
-    local args="${1}"
-    jager::prepare_build_services
-    cd ${BUILD_FOLDER}
+    python3 ${JAGERROOT}/deploy/docker_gen.py --workdir=${BUILD_FOLDER} --is_build services
     echo "Run 'docker-compose build ${args}'"
     docker-compose build ${args}
 }
 
 jager::build_apps() {
-    jager::show_info
+    local args="${1}"
 
-    cd ${BUILD_FOLDER}
+    local app_list=$(ls -d ./apps/*/)
+    for app in ${app_list}; do
+        local appname=`basename ${app}`
+        cd ${BUILD_FOLDER}/apps/${appname}/brain
+        echo "Run 'docker build -t jagereye/brain_${appname} ${args} .'"
+        docker build -t jagereye/brain_${appname} ${args} .
+    done
+}
 
-    # Build framework
-    echo "Building framework..."
-    cp -r ${JAGERROOT}/framework .
-    cd framework
+jager::build_all() {
+    jager::build_services
+    jager::build_apps
+}
+
+jager::build_appbase() {
+    cd ${BUILD_FOLDER}/framework
     python3 setup.py docker
-
-    # Build apps
-    echo "Building applications..."
 }
 
 jager::start() {
@@ -155,19 +179,17 @@ Start JagerEye docker containers.
 
 This command is equivalent to command 'docker-compose up'.
 
-Unless the docker images are already existed, this command also builds any missed images.
-
-If there is any change being made to the service source code, one must re-build the images
-by running 'jager build TARGET', otherwise, this command will pick up the old images to
-start, since it only runs build for images that doesn't exist.
+Unlike 'docker-compose up' we won't build the docker images if they don't exist, please
+make sure you have the TARGET docker images ready, by running 'jager build TARGET', before
+starting TARGET.
 
 Options:
     -*, --*         Please reference the 'Options' section from 'docker-compose up --help'
 
 Targets:
     all             Start all targets (default)
-    services        Only build services
-    apps            Only build applications
+    services        Only start services
+    apps            Only start applications
     "
     local target="all"
     local args=""
@@ -195,21 +217,16 @@ Targets:
         done
     fi
 
-    jager::reset_build_folder
-
-    if [ "${target}" == "all" ]; then
-        jager::start_all "${args}"
-    elif [ "${target}" == "services" ]; then
-        jager::start_services "${args}"
-    elif [ "${target}" == "apps" ]; then
-        jager::start_apps "${args}"
+    if [ "${target}" == "all" ] || [ "${target}" == "apps" ]; then
+        # When starting apps, we need to copy apps folder to build folder
+        jager::prepare_build apps
+    else
+        jager::prepare_build
     fi
-}
 
-jager::start_services() {
-    local args="${1}"
-    jager::prepare_build_services "${BUILD_FOLDER}"
     cd ${BUILD_FOLDER}
+
+    python3 ${JAGERROOT}/deploy/docker_gen.py --workdir=${BUILD_FOLDER} ${target}
     echo "Run 'docker-compose up ${args}'"
     docker-compose up ${args}
 }
