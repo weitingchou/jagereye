@@ -1,9 +1,9 @@
 import asyncio
+import time
 import aioredis
+from pymongo import MongoClient
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
-from pymongo import MongoClient
-import time
 
 from jagereye.brain.utils import jsonify, jsondumps
 from jagereye.brain import ticket
@@ -19,7 +19,6 @@ from jagereye.util.generic import get_func_name
 # Loading messaging
 with open(static_util.get_path('messaging.json'), 'r') as f:
     MESSAGES = jsonify(f.read())
-
 # NATS channels
 CH_API_TO_BRAIN = "ch_api_brain"
 CH_PUBLIC_BRAIN = "ch_brain"
@@ -37,9 +36,10 @@ class Brain(object):
 
     """
     def __init__(self, typename, ch_public='public_brain',
-                mq_host='nats://localhost:4222',
-                mem_db_host='redis://localhost:6379',
-                db_host='mongodb://localhost:27017'):
+                 mq_host='nats://localhost:4222',
+                 mem_db_host='redis://localhost:6379',
+                 event_db_host='mongodb://localhost:27017',
+                 event_db_name='jager_test'):
 
         """initial the brain service
 
@@ -56,8 +56,8 @@ class Brain(object):
         self._mq_host = mq_host
         self._nats_cli = NATS()
         self._ch_public = ch_public
-        
-        self._ticket = None
+
+        self._ticket_agent = None
         self._event_agent = None
         self._worker_agent = None
 
@@ -66,9 +66,10 @@ class Brain(object):
 
         # TODO(Ray): db api need to be abstracted,
         # TODO(Ray): and the MongoClient is Sync, need to be replaced to async version
-        self._db_host = db_host
-        db_cli = MongoClient(self._db_host)
-        self._event_db = db_cli.event
+        self._event_db_host = event_db_host
+        self._event_db_name = event_db_name
+        db_cli = MongoClient(self._event_db_host)
+        self._event_db = db_cli[self._event_db_name]['events']
 
     async def _setup(self):
         """register all handler
@@ -76,10 +77,10 @@ class Brain(object):
         """
         # TODO(Ray): both are mem db operations, need to be abstracted, or redesign
         self._mem_db_cli = await aioredis.create_redis(self._mem_db_host, loop=self._main_loop)
-        self._ticket = await ticket.create_ticket(self._main_loop)
 
         self._event_agent = EventAgent(self._typename, self._mem_db_cli, self._event_db)
         self._worker_agent = WorkerAgent(self._typename, self._mem_db_cli)
+        self._ticket_agent = ticket.TicketAgent(self._mem_db_cli)
 
         await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
         await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
@@ -124,7 +125,7 @@ class Brain(object):
                     await self._worker_agent.update_status(worker_id, WorkerStatus.READY.name)
                     analyzer_id = worker_obj['analyzer_id']
                     # check if there is a ticket for the analyzer
-                    result = await self._ticket.get(analyzer_id)
+                    result = await self._ticket_agent.get(analyzer_id)
                     if result:
                         # assign job to worker
                         context['ticket'] = result
@@ -155,7 +156,7 @@ class Brain(object):
                     # update the status to RUNNING
                     await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name)
                     # delete ticket
-                    await self._ticket.delete(ticket_id)
+                    await self._ticket_agent.delete(ticket_id)
                 else:
                     # TODO(Ray): when status not correct, what to do?
                     logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
@@ -163,14 +164,14 @@ class Brain(object):
             elif verb == 'event':
                 worker_id = context['workerID']
                 # retrieve analyzer_id
-                analyzer_id = self._worker_agent.get_anal_id(worker_id)
+                analyzer_id = await self._worker_agent.get_anal_id(worker_id)
                 logging.debug('Receive event inform in {}.'.format(get_func_name()))
                 # consume events from the worker
                 events = await self._event_agent.consume_from_worker(worker_id)
                 if not events:
                     return
 
-                self._event_agent.store_in_db(events, analyzer_id)
+                self._event_agent.save_in_db(events, analyzer_id)
 
                 logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
 
@@ -262,7 +263,7 @@ class Brain(object):
 
         elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
             context = {'msg': msg, 'reply': reply, 'timestamp': timestamp}
-            if await self._ticket.set(analyzer_id, context) == 0:
+            if await self._ticket_agent.set(analyzer_id, context) == 0:
                 # ticket already exists for analyzer #id, reject the request
                 # because we allow only one ticket for one write operation of the
                 # same analyzer at the same time
@@ -303,7 +304,7 @@ class Brain(object):
         elif msg['command'] == MESSAGES['ch_api_brain']['STOP_ANALYZER']:
             # TODO: Stop application
             context = {'msg': msg, 'reply': reply, 'timestamp': timestamp}
-            if await self._ticket.set(analyzer_id, context) == 0:
+            if await self._ticket_agent.set(analyzer_id, context) == 0:
                 # ticket already exists for analyzer #id, reject the request
                 # because we allow only one ticket for one write operation of the
                 # same analyzer at the same time
@@ -334,7 +335,7 @@ class Brain(object):
             # whenver the resource manager create a worker for the brain
             # then inform to brain
             worker_id = msg['response']['workerId']
-            analyzer_id = msg['ticketId']   # we use analyzer ID as ticket ID
+            analyzer_id = msg['ticketId'].replace('ticket:', '')   # we use analyzer ID as ticket ID
 
             logging.info('Receive launch ok in {} for worker "{}":analyzer "{}"'.
                     format(get_func_name(), worker_id, analyzer_id))
