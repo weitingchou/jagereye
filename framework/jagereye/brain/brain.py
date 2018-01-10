@@ -171,7 +171,7 @@ class Brain(object):
                 if not events:
                     return
 
-                self._event_agent.store_in_db(events, analyzer_id)
+                self._event_agent.save_in_db(events, analyzer_id)
 
                 logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
 

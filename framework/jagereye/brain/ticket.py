@@ -15,14 +15,14 @@ class TicketAgent():
             id: ticket ID
 
         Returns:
-            a dict object of ticket content
+            dict: The ticket content if the ticket ID exists, None otherwise.
         """
         key = gen_key(id)
         result = await self._mem_db.get(key)
         if result:
             return jsonify(result)
         else:
-            return
+            return None
 
     async def set(self, id, context):
         """Set ticket.
