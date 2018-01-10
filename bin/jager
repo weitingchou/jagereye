@@ -21,8 +21,8 @@ Options:
 Commands:
     build           Build docker images
     info            Display system-wide information
-    install         Install framework to system without building docker images
-    start           Start services and applications
+    install         Install framework to host without building docker images
+    start           Start services/applications docker containers
 
 Run 'jager COMMAND --help' for more information on a command.
 
