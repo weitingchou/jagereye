@@ -9,7 +9,8 @@
         "NOT_FOUND": "not found"
     },
     "ch_brain_res": {
-        "CREATE_WORKER": "create worker"
+        "CREATE_WORKER": "create worker",
+        "REMOVE_WORKER": "remove worker"
     },
     "ch_res_brain": {
         "NON_EXISTED_NAME": "non-existed name",
