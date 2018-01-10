@@ -1,6 +1,6 @@
 import aioredis
 import json
-import os
+import os, datetime
 
 from jsonschema import Draft4Validator as Validator
 from jagereye.brain.utils import jsonify
@@ -18,7 +18,16 @@ class EventAgent(object):
         self._mem_db = mem_db
         self._db = db
 
-    def store_in_db(self, events, analyzer_id):
+    def save_in_db(self, events, analyzer_id):
+        """Save events into mongodb
+
+        Args:
+            events:(list of dict): the list of event
+            analyzer_id:(string): the analyzer ID of the events
+
+        Raises:
+            TODO(Ray)
+        """
         # validate
         valid_events = []
         for event in events:
@@ -26,12 +35,12 @@ class EventAgent(object):
             if not validator.is_valid(event):
                 logging.error('Fail validation for event {}'.format(event))
             else:
+                event['date'] = datetime.datetime.fromtimestamp(event['timestamp'])
+                del event['timestamp']
                 valid_events.append(event)
         if valid_events:
             # TODO(Ray): error handler and logging if insert failed
-            return self._db.insert_many(valid_events)
-        else:
-            return
+            self._db.insert_many(valid_events)
 
     async def consume_from_worker(self, worker_id):
         """Get event array by worker ID.
@@ -53,7 +62,7 @@ class EventAgent(object):
         events = []
         for event_bin in events_bin:
             event_dict = jsonify(event_bin)
-            event_dict['timestamp'] = int(event_dict['timestamp'])
+            event_dict['timestamp'] = float(event_dict['timestamp'])
             events.append(event_dict)
         return events
 
