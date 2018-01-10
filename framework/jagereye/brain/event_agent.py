@@ -19,7 +19,7 @@ class EventAgent(object):
         self._db = db
 
     def save_in_db(self, events, analyzer_id):
-        """Save events into mongodb
+        """Save events into presistent db
 
         Args:
             events:(list of dict): the list of event
@@ -36,7 +36,6 @@ class EventAgent(object):
                 logging.error('Fail validation for event {}'.format(event))
             else:
                 event['date'] = datetime.datetime.fromtimestamp(event['timestamp'])
-                del event['timestamp']
                 valid_events.append(event)
         if valid_events:
             # TODO(Ray): error handler and logging if insert failed
