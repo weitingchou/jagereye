@@ -10,6 +10,7 @@ services:
         build: "{{services.api.buildpath}}"
         {%- endif %}
         image: "jagereye/api:{{services.api.version}}"
+        network_mode: "{{services.api.network_mode}}"
         ports:
             {%- for _, port in services.api.ports.items() %}
             - "{{port}}"
@@ -28,6 +29,7 @@ services:
         build: "{{services.database.buildpath}}"
         {%- endif %}
         image: "jagereye/database:{{services.database.version}}"
+        network_mode: "{{services.database.network_mode}}"
         ports:
             {%- for key, port in services.database.ports.items() %}
             - "{{port}}"
@@ -39,6 +41,7 @@ services:
         build: "{{services.messaging.buildpath}}"
         {%- endif %}
         image: "jagereye/messaging:{{services.messaging.version}}"
+        network_mode: "{{services.messaging.network_mode}}"
         ports:
             {%- for key, port in services.messaging.ports.items() %}
             - "{{port}}"
@@ -50,6 +53,7 @@ services:
         build: "{{services.mem_db.buildpath}}"
         {%- endif %}
         image: "jagereye/mem_db:{{services.mem_db.version}}"
+        network_mode: "{{services.mem_db.network_mode}}"
         ports:
             {%- for key, port in services.mem_db.ports.items() %}
             - "{{port}}"
