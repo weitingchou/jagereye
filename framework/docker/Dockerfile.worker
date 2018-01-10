@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-gpu
+FROM tensorflow/tensorflow:1.4.1-gpu-py3
 
 MAINTAINER JiaKuan Su <feabries@gmail.com>
 
