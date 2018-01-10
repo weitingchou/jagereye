@@ -74,6 +74,14 @@ mem_db_cli.on('warning', () => {
     console.log('Memory database warning.');
 });
 
+function _exec(cmd, options, callback) {
+    shell.exec(cmd, options, (code, stdout, stderr) => {
+        if (code !== 0) { return callback(stderr); }
+        callback(null, stdout);
+    });
+}
+const execAsync = Promise.promisify(_exec)
+
 // Generate a unique worker ID.
 function genWorkerId() {
     return `worker_${uuidv4()}`;
@@ -83,7 +91,7 @@ function genWorkerId() {
 function hasWorkerName(workerName) {
     const params = { silent: true };
     const {
-      stdout,
+        stdout,
     } = shell.exec(`docker images -q ${workerName} 2> /dev/null`, params);
     return stdout !== '';
 }
@@ -100,12 +108,24 @@ function createWorker(workerId, workerName) {
     // Please use normal docker instead of nvidia-docker after the GPU is split
     // from workers.
     const cmd = `nvidia-docker run \
+        --name=${workerId} \
         --network="host" \
         -v ${HOST_SHARED_DIR}:${CONTAINER_SHARED_DIR} \
         -e worker_id=${workerId} \
         ${workerName}`;
     const params = { async: true };
     shell.exec(cmd, params);
+}
+
+// Remove a worker.
+async function removeWorker(workerId) {
+    // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
+    // Please use normal docker instead of nvidia-docker after the GPU is split
+    // from workers.
+    const cmd = `docker rm \
+        --force \
+        ${workerId}`;
+    await execAsync(cmd, {silent: true});
 }
 
 // Get the key of a worker to access the memory database.
@@ -120,6 +140,11 @@ async function updateWorkerStatus(workerId, status) {
         status,
     });
     await mem_db_cli.setAsync(workerKey, workerInfo);
+}
+
+async function removeWorkerRecord(workerId) {
+    const key = getWorkerKey(workerId);
+    await mem_db_cli.delAsync(key);
 }
 
 // Helper function for replying to brain.
@@ -156,7 +181,7 @@ async function brainHandler(msg) {
     const { command } = request;
 
     switch (command) {
-        case MESSAGING[CH_BRAIN_TO_RES]['CREATE_WORKER']:
+        case MESSAGING[CH_BRAIN_TO_RES]['CREATE_WORKER']: {
             const {
                 workerName,
             } = request.params;
@@ -195,6 +220,27 @@ async function brainHandler(msg) {
             }
 
             break;
+        }
+
+        case MESSAGING[CH_BRAIN_TO_RES]['REMOVE_WORKER']: {
+            const {
+                workerId
+            } = request.params;
+
+            try {
+                // Remove a worker.
+                await removeWorker(workerId);
+                // Remove worker status record in memory database
+                await removeWorkerRecord(workerId);
+
+                console.log(`Worker (ID = ${workerId}) has been removed successfully`);
+            } catch (e) {
+                // TODO: Error handling.
+                console.error(e)
+            }
+
+            break;
+        }
 
         default:
             replyBrainError(request, MESSAGING[CH_RES_TO_BRAIN]['NON_SUPPORTED_CMD']);

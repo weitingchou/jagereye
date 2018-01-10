@@ -5,12 +5,12 @@ import os, datetime
 from jsonschema import Draft4Validator as Validator
 from jagereye.brain.utils import jsonify
 from jagereye.util import logging
+from jagereye.util import static_util
 
-# create a schema validator with a json file
-current_path = os.path.dirname(__file__)
-schema_path = os.path.join(current_path, 'schema/event.json')
-schema = json.load(open(schema_path))
-validator = Validator(schema)
+# create event schema validator
+with open(static_util.get_path('event.json'), 'r') as f:
+    validator = Validator(json.loads(f.read()))
+
 
 class EventAgent(object):
     def __init__(self, typename, mem_db, db):

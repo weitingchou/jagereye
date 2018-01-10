@@ -1,6 +1,6 @@
 {
   "title": "event_db",
-  "type": "object", 
+  "type": "object",
   "properties": {
     "analyzer_id": {
       "type": "string"
@@ -14,7 +14,7 @@
     "content": {
       "type": "object"
     }
-  }, 
+  },
   "additionalProperties": false,
   "required":["analyzer_id", "timestamp", "name", "content"]
 }

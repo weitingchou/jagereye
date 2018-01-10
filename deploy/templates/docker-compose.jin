@@ -1,0 +1,71 @@
+#
+# This file was generated automatically, please don't modify it unless you know what you're doing
+#
+---
+version: "2"
+services:
+    {%- if services %}
+    api:
+        {%- if build %}
+        build: "{{services.api.buildpath}}"
+        {%- endif %}
+        image: "jagereye/api:{{services.api.version}}"
+        ports:
+            {%- for _, port in services.api.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        depends_on:
+            - database
+            - messaging
+            - mem_db
+            {%- for app in apps %}
+            - {{app}}
+            {%- endfor %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    database:
+        {%- if build %}
+        build: "{{services.database.buildpath}}"
+        {%- endif %}
+        image: "jagereye/database:{{services.database.version}}"
+        ports:
+            {%- for key, port in services.database.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    messaging:
+        {%- if build %}
+        build: "{{services.messaging.buildpath}}"
+        {%- endif %}
+        image: "jagereye/messaging:{{services.messaging.version}}"
+        ports:
+            {%- for key, port in services.messaging.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    mem_db:
+        {%- if build %}
+        build: "{{services.mem_db.buildpath}}"
+        {%- endif %}
+        image: "jagereye/mem_db:{{services.mem_db.version}}"
+        ports:
+            {%- for key, port in services.mem_db.ports.items() %}
+            - "{{port}}"
+            {%- endfor %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    {%- endif %}
+    {%- for app in apps %}
+    {{app}}:
+        image: "jagereye/brain_{{app}}"
+        {%- if services %}
+        depends_on:
+            - database
+            - messaging
+            - mem_db
+        {%- endif %}
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+    {%- endfor %}
