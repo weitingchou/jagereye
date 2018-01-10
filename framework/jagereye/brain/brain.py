@@ -177,8 +177,10 @@ class Brain(object):
 
                 # TODO: Send events back to notification service.
             elif verb == 'hbeat':
-                # TODO: need to update to DB
+                worker_id = context['workerID']
                 logging.debug('hbeat: {}'.format(str(msg)))
+                # TODO: error handler
+                await self._worker_agent.update_last_hbeat(worker_id)
 
     async def _public_brain_handler(self, recv):
         """asychronous handler for public channel all initial workers
