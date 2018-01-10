@@ -131,8 +131,13 @@ class WorkerAgent(object):
         Returns:
             bool: True for success, False otherwise
         """
-        # TODO(Ray)
-        pass
+        result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
+        # TODO(Ray): what if no anal_worker_id
+        anal_worker_id = result[0]
+        worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
+        timestamp = time.time()
+        worker_obj['last_hbeat'] = timestamp
+        return (await self._mem_db.set(anal_worker_id, str(worker_obj)))
 
     async def update_worker_id(self, analyzer_id, worker_id):
         """Update the worker id to the worker record
