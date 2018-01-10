@@ -416,7 +416,7 @@ class VideoRecordModule(IModule):
         image = blob.fetch(self._image_name)
         im_width = image.shape[1]
         im_height = image.shape[0]
-        timestamp = str(blob.fetch('timestamp'))
+        timestamp = float(blob.fetch('timestamp'))
         mode = int(blob.fetch('mode'))
 
         # Check the dimension of image tensor.
@@ -494,7 +494,7 @@ class OutputModule(IModule):
         """The routine of module execution."""
         for blob in blobs:
             mode = int(blob.fetch('mode'))
-            timestamp = str(blob.fetch('timestamp'))
+            timestamp = float(blob.fetch('timestamp'))
             if mode == _MODE.ALERT_START:
                 video_name = str(blob.fetch('video_name'))
                 triggered = blob.fetch('in_region_labels').tolist()
