@@ -266,8 +266,20 @@ class Brain(object):
         analyzer_id = msg['params']['id']
 
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
-            # TODO: Return application status
-            await self._nats_cli.publish(reply, str("It is running").encode())
+            # TODO(Ray): error handler, if analyzer_id not existed
+            worker_obj = await self._worker_agent.get_info(analyzer_id=analyzer_id)
+            pipelines = []
+            # TODO(Ray): how to confirm it is really enabled, and it may need pipeline_staus.json?
+            for pipe in worker_obj['pipelines']:
+                pipeline.append({'name': pipe['name'], 'status': 'enabled'})
+            reply_msg = {
+                'command': MESSAGES['ch_api_brain_reply']['REPLY_ANALYZER_STATUS'],
+                'params':{
+                    'id': analyzer_id,
+                    'pipelines': pipelines
+                }
+            }
+            await self._nats_cli.publish(reply, str(reply_msg).encode())
 
         elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
             context = {'msg': msg, 'reply': reply, 'timestamp': timestamp}
