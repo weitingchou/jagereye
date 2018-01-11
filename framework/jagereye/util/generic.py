@@ -11,9 +11,9 @@ def get_func_name():
 
 
 def now():
-    """Get current time.
+    """Get current timestamp.
 
     Returns:
-      float: Current time.
+      float: Current timestamp.
     """
     return time.time()
