@@ -4,12 +4,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import datetime
 import os
 
 import pytest
 
 from jagereye.streaming.capturers.stream_capturers import VideoStreamCapturer
+from jagereye.util.generic import now
 
 
 class TestVideoStreamCapturer(object):
@@ -38,11 +38,8 @@ class TestVideoStreamCapturer(object):
         assert image.shape[1] == 320
         assert image.shape[2] == 3
         # Test the timestamp.
-        timestamp = str(blob.fetch('timestamp'))
-        date_timestamp = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')
-        date_now = datetime.datetime.now()
-        time_delta = (date_now - date_timestamp).total_seconds()
-        assert time_delta < 0.2
+        timestamp = float(blob.fetch('timestamp'))
+        assert (now() - timestamp) < 0.2
 
         capturer.destroy()
 
