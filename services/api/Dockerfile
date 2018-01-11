@@ -45,7 +45,7 @@ COPY . ./jagereye/services/api
 # Copy shared files
 # [NOTE] Shared files should be copied in to the build context before
 #        running docker build
-COPY services.yml ./jagereye/shared
+COPY config.yml ./jagereye/shared
 COPY messaging.json ./jagereye/shared
 COPY database.json ./jagereye/shared
 
