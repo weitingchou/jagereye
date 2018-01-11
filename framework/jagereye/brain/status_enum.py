@@ -7,3 +7,4 @@ class WorkerStatus(Enum):
     CONFIG = 'config'
     READY = 'ready'
     RUNNING = 'running'
+    DOWN = 'down'

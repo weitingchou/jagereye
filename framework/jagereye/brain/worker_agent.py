@@ -119,6 +119,8 @@ class WorkerAgent(object):
         # TODO(Ray): what if no anal_worker_id
         anal_worker_id = result[0]
         worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
+        timestamp = time.time()
+        worker_obj['last_hbeat'] = timestamp
         worker_obj['status'] = status
         return (await self._mem_db.set(anal_worker_id, str(worker_obj)))
 
@@ -161,3 +163,22 @@ class WorkerAgent(object):
         # delete the original record
         await self._mem_db.delete(ori_id)
 
+    async def examine_all_workers(self, threshold):
+        """Examine if each workers is alive
+
+        """
+        anal_worker_ids = await self._mem_db.keys('anal_worker:*')
+        worker_objs = await self._mem_db.execute('mget', *anal_worker_ids)
+        timestamp = time.time()
+        for anal_worker_id, worker_obj in zip(anal_worker_ids, worker_objs):
+            # TODO(Ray):error handler
+            worker_obj = jsonify(worker_obj)
+            if worker_obj['status'] == WorkerStatus.RUNNING.name \
+                    or worker_obj['status'] == WorkerStatus.RUNNING.name:
+                if (float(timestamp - worker_obj['last_hbeat'])) > threshold:
+                    # TODO(Ray): logging policy need to be redefine
+                    logging.error('worker {} is down'.format(anal_worker_id))
+                    # change status to DOWN
+                    worker_obj['status'] = WorkerStatus.DOWN.name
+                    #TODO(Ray): error handler
+                    await self._mem_db.set(anal_worker_id, str(worker_obj))
