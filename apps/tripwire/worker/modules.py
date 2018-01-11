@@ -351,8 +351,7 @@ def _record_video(video_name,
                   thumbnail_name,
                   fps,
                   video_size,
-                  queue,
-                  codec='MJPG'):
+                  queue):
     """Threading function to record a video.
 
     Args:
@@ -363,18 +362,12 @@ def _record_video(video_name,
         width (int): The video width.
         height (int): The video height.
       queue (`queue.Queue`): The task queue.
-      coded (string): The codec of recorded video. Defaults to 'MJPG'.
     """
     logging.info('Start recording {}'.format(video_name))
 
-    # TODO(JiaKuan Su): MJPEG is heavy, please use another codec, such as h264.
-    if cv2.__version__.startswith('2.'):
-        # OpenCV 2.X
-        fourcc = cv2.cv.FOURCC(*codec)
-    else:
-        # OpenCV 3.X
-        fourcc = cv2.VideoWriter_fourcc(*codec)
-    video_writer = cv2.VideoWriter(video_name, fourcc, fps, video_size)
+    gst_pipeline = ('appsrc ! autovideoconvert ! x264enc ! mp4mux !'
+                    ' filesink location={}'.format(video_name))
+    video_writer = cv2.VideoWriter(gst_pipeline, 0, fps, video_size)
 
     while True:
         task = queue.get(block=True)
@@ -439,7 +432,7 @@ class VideoRecordModule(IModule):
                 os.makedirs(self._files_dir)
             # TODO(JiaKuan Su): Browser can't play avi files, use mp4 instead.
             video_name = os.path.join(self._files_dir,
-                                      '{}.avi'.format(timestamp))
+                                      '{}.mp4'.format(timestamp))
             thumbnail_name = os.path.join(self._files_dir,
                                           '{}.jpg'.format(timestamp))
             video_size = (im_width, im_height)
@@ -495,6 +488,7 @@ class VideoRecordModule(IModule):
             self._queue.put({
                 'command': 'END'
             })
+            self._video_recorder.join()
 
 
 class OutputModule(IModule):
