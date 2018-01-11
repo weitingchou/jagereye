@@ -4,7 +4,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import datetime
 import time
 
 import cv2
@@ -12,6 +11,7 @@ import numpy as np
 
 from jagereye.streaming.blob import Blob
 from jagereye.streaming.capturers.base import ICapturer
+from jagereye.util.generic import now
 
 
 class VideoStreamCapturer(ICapturer):
@@ -69,7 +69,7 @@ class VideoStreamCapturer(ICapturer):
           EOFError: If the stream ends.
         """
         success, image = self._cap.read()
-        timestamp = np.array(self._get_current_timestamp())
+        timestamp = np.array(now())
         if not success:
             raise EOFError()
 
@@ -82,13 +82,3 @@ class VideoStreamCapturer(ICapturer):
     def destroy(self):
         """The routine of video stream capturer destruction."""
         self._cap.release()
-
-    def _get_current_timestamp(self):
-        """Get current timestamp.
-
-        Returns:
-          string: Current timestamp.
-        """
-        t = time.time()
-        timestamp = datetime.datetime.fromtimestamp(t)
-        return str(timestamp)
