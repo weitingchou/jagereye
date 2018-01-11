@@ -156,11 +156,13 @@ class Brain(object):
                 ticket_id = context['ticket']['ticket_id']
                 worker_id = context['workerID']
                 analyzer_id = context['analyzer_id']
+                pipelines = context['ticket']['msg']['params']['pipelines']
+
                 worker_obj = await self._worker_agent.get_info(worker_id=worker_id, analyzer_id=analyzer_id)
                 # check if  worker status is 'CONFIG'
                 if worker_obj['status'] == WorkerStatus.CONFIG.name:
                     # update the status to RUNNING
-                    await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name)
+                    await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name, pipelines)
                     # delete ticket
                     await self._ticket_agent.delete(ticket_id)
                 else:
@@ -268,17 +270,23 @@ class Brain(object):
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
             # TODO(Ray): error handler, if analyzer_id not existed
             worker_obj = await self._worker_agent.get_info(analyzer_id=analyzer_id)
-            pipelines = []
-            # TODO(Ray): how to confirm it is really enabled, and it may need pipeline_staus.json?
-            for pipe in worker_obj['pipelines']:
-                pipeline.append({'name': pipe['name'], 'status': 'enabled'})
-            reply_msg = {
-                'command': MESSAGES['ch_api_brain_reply']['REPLY_ANALYZER_STATUS'],
-                'params':{
-                    'id': analyzer_id,
-                    'pipelines': pipelines
+            if worker_obj:
+                pipelines = []
+                # TODO(Ray): how to confirm it is really enabled, and it may need pipeline_staus.json?
+                for pipe in worker_obj['pipelines']:
+                    pipelines.append({'name': pipe['name'], 'status': 'enabled'})
+                reply_msg = {
+                    'command': MESSAGES['ch_api_brain_reply']['REPLY_ANALYZER_STATUS'],
+                    'status':worker_obj['status'],
+                    'params':{
+                        'id': analyzer_id,
+                        'pipelines': pipelines
+                    }
                 }
-            }
+            else:
+                reply_msg = {
+                    'command': MESSAGES['ch_api_brain_reply']['NOT_FOUND'],
+                }
             await self._nats_cli.publish(reply, str(reply_msg).encode())
 
         elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
