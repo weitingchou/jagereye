@@ -110,19 +110,19 @@ jager::prepare_build() {
     # Copy shared files to build folder
     cp -r ${JAGERROOT}/shared .
 
-    # Create a symbolic link, named 'services.yml', for service config file, and it will be used for:
-    # 1) deploy/docker_gen.py, which will look for 'services.yml' to generate docker-compose.yml.
-    # 2) When building 'appbase', framework/setup.py will copy 'services.yml' to framework static folder.
-    local src_config_file="${BUILD_FOLDER}/shared/services.${JAGERENV}.yml"
+    # Create a symbolic link, named 'config.yml', for service config file, and it will be used for:
+    # 1) deploy/docker_gen.py, which will look for 'config.yml' to generate docker-compose.yml.
+    # 2) When building 'appbase', framework/setup.py will copy 'config.yml' to framework static folder.
+    local src_config_file="${BUILD_FOLDER}/shared/config.${JAGERENV}.yml"
     if [ ! -f ${src_config_file} ]; then
         jager::error "Config file '${src_config_file}' was not found!"
     fi
-    ln -s ${src_config_file} ${BUILD_FOLDER}/shared/services.yml
+    ln -s ${src_config_file} ${BUILD_FOLDER}/shared/config.yml
 
     # Copy target files to build folder
-    for target in ${targets}
+    for item in ${targets}
     do
-        cp -r ${JAGERROOT}/${target} .
+        cp -r ${JAGERROOT}/${item} .
     done
 }
 
@@ -136,12 +136,12 @@ jager::build_services() {
     # TODO: Do more fine-grained control about which shared file is required
     #       by which service
     local service_list=$(ls -d ./services/*/)
-    for service in ${service_list}; do
+    for item in ${service_list}; do
         # XXX: It's ugly, but currently there is no way to copy/add files outside
         #      the build context in Dockerfile, even for symbolic linked files, ie.,
         #      can't write something like 'COPY ../some_file .'
         #      For more details, please read https://github.com/moby/moby/issues/18789
-        cp ${shared_folder}/* ${service}
+        cp ${shared_folder}/* ${item}
     done
 
     python3 ${JAGERROOT}/deploy/docker_gen.py --workdir=${BUILD_FOLDER} --is_build services
@@ -153,8 +153,8 @@ jager::build_apps() {
     local args="${1}"
 
     local app_list=$(ls -d ./apps/*/)
-    for app in ${app_list}; do
-        local appname=`basename ${app}`
+    for item in ${app_list}; do
+        local appname=`basename ${item}`
         cd ${BUILD_FOLDER}/apps/${appname}/brain
         echo "Run 'docker build -t jagereye/brain_${appname} ${args} .'"
         docker build -t jagereye/brain_${appname} ${args} .
@@ -217,12 +217,7 @@ Targets:
         done
     fi
 
-    if [ "${target}" == "all" ] || [ "${target}" == "apps" ]; then
-        # When starting apps, we need to copy apps folder to build folder
-        jager::prepare_build apps
-    else
-        jager::prepare_build
-    fi
+    jager::prepare_build
 
     cd ${BUILD_FOLDER}
 
