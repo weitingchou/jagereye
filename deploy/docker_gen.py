@@ -27,7 +27,7 @@ import os
 import errno
 
 
-SUPPORTED_TARGETS = ['All', 'Services', 'Apps']
+SUPPORTED_TARGETS = ['all', 'services', 'apps']
 
 
 def load_config(filename):
@@ -61,44 +61,37 @@ class Generator(object):
             if e.errno == errno.ENOENT:
                 errexit('Template file "docker-compose.jin" was not found')
 
-    def _get_service_context(self, is_build=False):
-        # Load service config file
+        # Load config file
         try:
-            config_file = os.path.join(self._workdir, 'shared/services.yml')
-            config = load_config(config_file)['services']
+            config_file = os.path.join(self._workdir, 'shared/config.yml')
+            self._config = load_config(config_file)
         except OSError as e:
             if e.errno == errno.ENOENT:
-                errexit('Service config file "{}" was not found'.format(e.filename))
+                errexit('Config file "{}" was not found'.format(e.filename))
         except KeyError as e:
             if e == 'services':
-                errexit('Invalid service config file format')
+                errexit('Invalid config file format')
 
+    def _get_service_context(self, is_build=False):
+        context = self._config['services']
         # Construct build path when it's a build operation
         if is_build is True:
-            for (k, v) in config.items():
-                config[k]['buildpath'] = os.path.join(self._workdir, 'services', k)
-
-        return config
+            for (k, v) in context.items():
+                context[k]['buildpath'] = os.path.join(self._workdir,
+                                                       'services', k)
+        return context
 
     def _get_app_context(self):
-        # TODO: Need to find a more robust way of getting the list of apps.
-        #       Maybe we should maintaining a file for apps information and
-        #       then we can read the file to get the list.
-        return os.listdir(os.path.join(self._workdir, 'apps'))
+        context = self._config['apps']
+        return context
 
     def generate(self, target, is_build=False):
         context = {"environ": os.environ}
 
-        if target == 'services':
+        if target == 'services' or target == 'all':
             context['services'] = self._get_service_context(is_build)
-        elif target == 'apps':
+        if target == 'apps' or target == 'all':
             context['apps'] = self._get_app_context()
-        elif target == 'all':
-            context['services'] = self._get_service_context(is_build)
-            context['apps'] = self._get_app_context()
-        else:
-            errexit('Invalid target: {}, not in: {}'.format(target,
-                                                            SUPPORTED_TARGETS))
 
         if is_build is True:
             context['build'] = True
@@ -120,6 +113,10 @@ def main():
         errexit('--rootdir was not specified and JAGERROOT was not defined')
     is_build = options['--is_build'] if options['--is_build'] else False
     target = options['TARGET']
+
+    if target not in SUPPORTED_TARGETS:
+        errexit('Unsupported target: {}, should be: {}'.format(
+            target, SUPPORTED_TARGETS))
 
     # Generate target docker-compose file
     generator = Generator(workdir, rootdir)

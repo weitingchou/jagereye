@@ -10,6 +10,7 @@ services:
         build: "{{services.api.buildpath}}"
         {%- endif %}
         image: "jagereye/api:{{services.api.version}}"
+        network_mode: "{{services.api.network_mode}}"
         ports:
             {%- for _, port in services.api.ports.items() %}
             - "{{port}}"
@@ -18,9 +19,11 @@ services:
             - database
             - messaging
             - mem_db
-            {%- for app in apps %}
+            {%- if apps %}
+            {%- for app, _ in apps.items() %}
             - {{app}}
             {%- endfor %}
+            {%- endif %}
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
     database:
@@ -28,6 +31,7 @@ services:
         build: "{{services.database.buildpath}}"
         {%- endif %}
         image: "jagereye/database:{{services.database.version}}"
+        network_mode: "{{services.database.network_mode}}"
         ports:
             {%- for key, port in services.database.ports.items() %}
             - "{{port}}"
@@ -39,6 +43,7 @@ services:
         build: "{{services.messaging.buildpath}}"
         {%- endif %}
         image: "jagereye/messaging:{{services.messaging.version}}"
+        network_mode: "{{services.messaging.network_mode}}"
         ports:
             {%- for key, port in services.messaging.ports.items() %}
             - "{{port}}"
@@ -50,6 +55,7 @@ services:
         build: "{{services.mem_db.buildpath}}"
         {%- endif %}
         image: "jagereye/mem_db:{{services.mem_db.version}}"
+        network_mode: "{{services.mem_db.network_mode}}"
         ports:
             {%- for key, port in services.mem_db.ports.items() %}
             - "{{port}}"
@@ -57,9 +63,11 @@ services:
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
     {%- endif %}
-    {%- for app in apps %}
+    {%- if apps %}
+    {%- for app, content in apps.items() %}
     {{app}}:
-        image: "jagereye/brain_{{app}}"
+        image: "jagereye/brain_{{app}}:{{content.version}}"
+        network_mode: "{{content.network_mode}}"
         {%- if services %}
         depends_on:
             - database
@@ -69,3 +77,4 @@ services:
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
     {%- endfor %}
+    {%- endif %}
