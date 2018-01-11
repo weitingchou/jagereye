@@ -107,6 +107,8 @@ function createWorker(workerId, workerName) {
     // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
     // Please use normal docker instead of nvidia-docker after the GPU is split
     // from workers.
+    // TODO: Read the network mode configuration from 'shared/config.*.yml' instead
+    //       of hardcoded '--network="host"'.
     const cmd = `nvidia-docker run \
         --name=${workerId} \
         --network="host" \
