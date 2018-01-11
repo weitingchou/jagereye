@@ -11,6 +11,7 @@ from jagereye.brain.event_agent import EventAgent
 from jagereye.brain.worker_agent import WorkerAgent
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
+from jagereye.util import timer
 from jagereye.util import logging
 from jagereye.util import static_util
 from jagereye.util.generic import get_func_name
@@ -25,6 +26,9 @@ CH_PUBLIC_BRAIN = "ch_brain"
 
 CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
+
+EXAMINE_INTERVAL = 6
+EXAMINE_THREASHOLD = 10
 
 class Brain(object):
     """Brain the base class for brain service.
@@ -86,6 +90,8 @@ class Brain(object):
         await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
         await self._nats_cli.subscribe(CH_PUBLIC_BRAIN, cb=self._public_brain_handler)
         await self._nats_cli.subscribe(CH_RES_TO_BRAIN, cb=self._res_handler)
+
+        timer.Timer(EXAMINE_INTERVAL, self._worker_agent.examine_all_workers, EXAMINE_THREASHOLD)
 
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers
