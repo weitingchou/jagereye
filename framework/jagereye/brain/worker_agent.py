@@ -70,11 +70,17 @@ class WorkerAgent(object):
         elif worker_id:
             # TODO(Ray): check 'result', error handler
             result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
+            if not result:
+                return None
+
             anal_worker_id = (result[0]).decode()
             analyzer_id = anal_worker_id.split(':')[1]
         elif analyzer_id:
             # TODO(Ray): check 'result', error handler
             result = await self._mem_db.keys('anal_worker:{}:*'.format(analyzer_id))
+            if not result:
+                return None
+
             anal_worker_id = (result[0]).decode()
             worker_id = anal_worker_id.split(':')[2]
         else:
@@ -104,13 +110,14 @@ class WorkerAgent(object):
         analyzer_id = anal_worker_id.split(':')[1]
         return analyzer_id
 
-    async def update_status(self, worker_id, status):
-        """Update status for worker with the worker id.
+    async def update_status(self, worker_id, status, pipelines=None):
+        """Update status and enabled pipeline for worker with the worker id.
 
         Args:
-            worker_id (string): worker id
-            status (string): The new worker status.
-                The status should be 'create', 'initial', 'hshake_1', 'config', 'ready' or 'running'.
+            worker_id (string): required, worker id
+            status (string): required, the new worker status.
+                The status should be 'create', 'initial', 'hshake_1', 'config', 'ready','running' 'down'.
+            pipelines (list of dict): optional, the enabled pipelines with parameters
 
         Returns:
             bool: True for success, False otherwise
@@ -122,6 +129,8 @@ class WorkerAgent(object):
         timestamp = time.time()
         worker_obj['last_hbeat'] = timestamp
         worker_obj['status'] = status
+        if pipelines:
+            worker_obj['pipelines'] = pipelines
         return (await self._mem_db.set(anal_worker_id, str(worker_obj)))
 
     async def update_last_hbeat(self, worker_id):
