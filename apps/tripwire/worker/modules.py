@@ -347,11 +347,17 @@ class TripwireModeModule(IModule):
         pass
 
 
-def _record_video(file_name, fps, video_size, queue, codec='MJPG'):
+def _record_video(video_name,
+                  thumbnail_name,
+                  fps,
+                  video_size,
+                  queue,
+                  codec='MJPG'):
     """Threading function to record a video.
 
     Args:
-      file_name (string): The name of recorded video.
+      video_name (string): The name of recorded video.
+      thumbnail_name (string): The name of thumbnail image.
       fps (int): The FPS of recorded video.
       video_size (tuple): The size of recorded video. The tuple contains:
         width (int): The video width.
@@ -359,7 +365,7 @@ def _record_video(file_name, fps, video_size, queue, codec='MJPG'):
       queue (`queue.Queue`): The task queue.
       coded (string): The codec of recorded video. Defaults to 'MJPG'.
     """
-    logging.info('Start recording {}'.format(file_name))
+    logging.info('Start recording {}'.format(video_name))
 
     # TODO(JiaKuan Su): MJPEG is heavy, please use another codec, such as h264.
     if cv2.__version__.startswith('2.'):
@@ -368,18 +374,22 @@ def _record_video(file_name, fps, video_size, queue, codec='MJPG'):
     else:
         # OpenCV 3.X
         fourcc = cv2.VideoWriter_fourcc(*codec)
-    video_writer = cv2.VideoWriter(file_name, fourcc, fps, video_size)
+    video_writer = cv2.VideoWriter(video_name, fourcc, fps, video_size)
 
     while True:
         task = queue.get(block=True)
         command = task['command']
         if command == 'RECORD':
-            video_writer.write(task['image'])
+            image = task['image']
+            video_writer.write(image)
+            if task['thumbnail']:
+                cv2.imwrite(thumbnail_name, image)
+                logging.info('Save thumbnail {}'.format(video_name))
         elif command == 'END':
             break
 
     video_writer.release()
-    logging.info('End recording {}'.format(file_name))
+    logging.info('End recording {}'.format(video_name))
 
 
 class VideoRecordModule(IModule):
@@ -423,22 +433,22 @@ class VideoRecordModule(IModule):
         if image.ndim != 3:
             raise RuntimeError('The input "image" tensor is not 3-dimensional.')
 
-        # Insert the newest image to reserved buffer.
-        self._reserved_images.append(image)
-        # Remove the oldest image from the reserved buffer if necessary.
-        if len(self._reserved_images) > self._reserved_count:
-            self._reserved_images.pop(0)
-
         # Handle alert mode.
         if mode == _MODE.ALERT_START:
             if not os.path.exists(self._files_dir):
                 os.makedirs(self._files_dir)
             # TODO(JiaKuan Su): Browser can't play avi files, use mp4 instead.
-            file_name = os.path.join(self._files_dir,
-                                     '{}.avi'.format(timestamp))
+            video_name = os.path.join(self._files_dir,
+                                      '{}.avi'.format(timestamp))
+            thumbnail_name = os.path.join(self._files_dir,
+                                          '{}.jpg'.format(timestamp))
             video_size = (im_width, im_height)
             self._queue = Queue()
-            args = (file_name, self._fps, video_size, self._queue,)
+            args = (video_name,
+                    thumbnail_name,
+                    self._fps,
+                    video_size,
+                    self._queue,)
             self._video_recorder = threading.Thread(target=_record_video,
                                                     args=args)
             self._video_recorder.setDaemon(True)
@@ -446,13 +456,21 @@ class VideoRecordModule(IModule):
             for reserved_image in self._reserved_images:
                 self._queue.put({
                     'command': 'RECORD',
-                    'image': reserved_image
+                    'image': reserved_image,
+                    'thumbnail': False
                 })
-            blob.feed('video_name', np.array(file_name))
+            self._queue.put({
+                'command': 'RECORD',
+                'image': image,
+                'thumbnail': True
+            })
+            blob.feed('video_name', np.array(video_name))
+            blob.feed('thumbnail_name', np.array(thumbnail_name))
         elif mode == _MODE.ALERTING:
             self._queue.put({
                 'command': 'RECORD',
-                'image': image
+                'image': image,
+                'thumbnail': False
             })
         elif mode == _MODE.ALERT_END:
             self._queue.put({
@@ -460,6 +478,12 @@ class VideoRecordModule(IModule):
             })
             self._video_recorder = None
             self._queue = None
+
+        # Insert the newest image to reserved buffer.
+        self._reserved_images.append(image)
+        # Remove the oldest image from the reserved buffer if necessary.
+        if len(self._reserved_images) > self._reserved_count:
+            self._reserved_images.pop(0)
 
         return blobs
 
@@ -497,11 +521,13 @@ class OutputModule(IModule):
             timestamp = float(blob.fetch('timestamp'))
             if mode == _MODE.ALERT_START:
                 video_name = str(blob.fetch('video_name'))
+                thumbnail_name = str(blob.fetch('thumbnail_name'))
                 triggered = blob.fetch('in_region_labels').tolist()
                 name = 'tripwire_alert'
                 content = {
                     'triggered': triggered,
-                    'video_name': video_name
+                    'video_name': video_name,
+                    'thumbnail_name': thumbnail_name
                 }
                 self._send_event(name, timestamp, content)
                 logging.info('Sent event name: "{}", timestamp: "{}", content:'
