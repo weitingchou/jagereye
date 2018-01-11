@@ -168,6 +168,9 @@ class WorkerAgent(object):
 
         """
         anal_worker_ids = await self._mem_db.keys('anal_worker:*')
+        # if no worker exist, then no need to examine
+        if not anal_worker_ids:
+            return
         worker_objs = await self._mem_db.execute('mget', *anal_worker_ids)
         timestamp = time.time()
         for anal_worker_id, worker_obj in zip(anal_worker_ids, worker_objs):
