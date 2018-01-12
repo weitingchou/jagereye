@@ -126,7 +126,7 @@ class Worker(object):
 
         Args:
           event_type (string): The event type.
-          timestamp (string): The timestamp of the event.
+          timestamp (float): The timestamp of the event.
           content (dict): The event content.
         """
         logging.debug('Try to send event (name = "{}", type = "{}", timestamp = "{}", content'
