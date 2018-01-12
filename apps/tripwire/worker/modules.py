@@ -528,15 +528,15 @@ class OutputModule(IModule):
                 video_name = str(blob.fetch('video_name'))
                 thumbnail_name = str(blob.fetch('thumbnail_name'))
                 triggered = blob.fetch('in_region_labels').tolist()
-                name = 'tripwire_alert'
+                event_type = 'tripwire_alert'
                 content = {
                     'triggered': triggered,
                     'video_name': video_name,
                     'thumbnail_name': thumbnail_name
                 }
-                self._send_event(name, timestamp, content)
-                logging.info('Sent event name: "{}", timestamp: "{}", content:'
-                             ' "{}"'.format(name, timestamp, content))
+                self._send_event(event_type, timestamp, content)
+                logging.info('Sent event type: "{}", timestamp: "{}", content:'
+                             ' "{}"'.format(event_type, timestamp, content))
 
         return blobs
 
