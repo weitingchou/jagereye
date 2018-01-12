@@ -365,7 +365,7 @@ def _record_video(video_name,
     """
     logging.info('Start recording {}'.format(video_name))
 
-    gst_pipeline = ('appsrc ! autovideoconvert ! x264enc ! mp4mux !'
+    gst_pipeline = ('appsrc ! autovideoconvert ! x264enc ! matroskamux !'
                     ' filesink location={}'.format(video_name))
     video_writer = cv2.VideoWriter(gst_pipeline, 0, fps, video_size)
 
@@ -377,7 +377,7 @@ def _record_video(video_name,
             video_writer.write(image)
             if task['thumbnail']:
                 cv2.imwrite(thumbnail_name, image)
-                logging.info('Save thumbnail {}'.format(video_name))
+                logging.info('Save thumbnail {}'.format(thumbnail_name))
         elif command == 'END':
             break
 
@@ -389,17 +389,29 @@ class VideoRecordModule(IModule):
     # TODO(JiaKuan Su): Please fill the detailed docstring.
     """The module for recording video clips."""
 
-    def __init__(self, files_dir, reserved_count, fps, image_name='image'):
+    def __init__(self,
+                 files_dir,
+                 reserved_count,
+                 fps,
+                 video_format = 'mp4',
+                 thumbnail_format = 'jpg',
+                 image_name='image'):
         """Create a new `VideoRecordModule`.
 
         Args:
+          files_dir (string): The directory to store the output video.
           reserved_count (int): The number of reseved images before alert mode.
           fps (int): The FPS of recorded video.
+          video_format (string): The format of video. Defaults to "mp4".
+          thumbnail_format (string): The format of thumbnail image. Defaults to
+            "mp4".
           image_name (string): The name of input tensor to read. Defaults to
             "image".
         """
         self._files_dir = files_dir
         self._reserved_count = reserved_count
+        self._video_format = video_format
+        self._thumbnail_format = thumbnail_format
         self._fps = fps
         self._image_name = image_name
         self._reserved_images = []
@@ -430,11 +442,10 @@ class VideoRecordModule(IModule):
         if mode == _MODE.ALERT_START:
             if not os.path.exists(self._files_dir):
                 os.makedirs(self._files_dir)
-            # TODO(JiaKuan Su): Browser can't play avi files, use mp4 instead.
-            video_name = os.path.join(self._files_dir,
-                                      '{}.mp4'.format(timestamp))
-            thumbnail_name = os.path.join(self._files_dir,
-                                          '{}.jpg'.format(timestamp))
+            video_name = '{}.{}'.format(timestamp, self._video_format)
+            video_name = os.path.join(self._files_dir, video_name)
+            thumbnail_name = '{}.{}'.format(timestamp, self._thumbnail_format)
+            thumbnail_name = os.path.join(self._files_dir, thumbnail_name)
             video_size = (im_width, im_height)
             self._queue = Queue()
             args = (video_name,
