@@ -129,14 +129,14 @@ class Worker(object):
           timestamp (float): The timestamp of the event.
           content (dict): The event content.
         """
-        logging.debug('Try to send event (name = "{}", type = "{}", timestamp = "{}", content'
+        logging.debug('Try to send event (app_name = "{}", type = "{}", timestamp = "{}", content'
                       ' = "{}") to brain'.format(self._name, event_type, timestamp, content))
 
         # Construct the key of event queue.
         event_queue_key = 'event:brain:{}'.format(self._worker_id)
         # Construct the event.
         event = {
-            'name': self._name,
+            'app_name': self._name,
             'type': event_type,
             'timestamp': timestamp,
             'content': content
@@ -155,7 +155,7 @@ class Worker(object):
                                                str(request).encode())
         asyncio.run_coroutine_threadsafe(async_publish, self._main_loop)
 
-        logging.debug('Success to send event (name = "{}", type = "{}", timestamp = "{}", '
+        logging.debug('Success to send event (app_name = "{}", type = "{}", timestamp = "{}", '
                       'content = "{}") to brain'.format(self._name, event_type, timestamp, content))
 
     async def _hbeat_publisher(self):
