@@ -144,7 +144,7 @@ def main():
     cp_static_files([
         abspath('../shared/messaging.json'),
         abspath('../shared/database.json'),
-        abspath('../shared/services.yml'),
+        abspath('../shared/config.yml'),
         abspath('../shared/event.json'),
         abspath('../shared/worker.json')
     ])

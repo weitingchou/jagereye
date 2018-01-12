@@ -103,7 +103,7 @@ def _send_event(name, timestamp, content):
 
     Args:
       name (string): The event name.
-      timestamp (string): The timestamp of the event.
+      timestamp (float): The timestamp of the event.
       content (dict): The event content.
     """
     logging.info('From Mocked send_event with event name: "{}", timestamp: "{}"'

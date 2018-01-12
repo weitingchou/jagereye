@@ -19,9 +19,11 @@ services:
             - database
             - messaging
             - mem_db
-            {%- for app in apps %}
+            {%- if apps %}
+            {%- for app, _ in apps.items() %}
             - {{app}}
             {%- endfor %}
+            {%- endif %}
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
     database:
@@ -61,9 +63,11 @@ services:
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
     {%- endif %}
-    {%- for app in apps %}
+    {%- if apps %}
+    {%- for app, content in apps.items() %}
     {{app}}:
-        image: "jagereye/brain_{{app}}"
+        image: "jagereye/brain_{{app}}:{{content.version}}"
+        network_mode: "{{content.network_mode}}"
         {%- if services %}
         depends_on:
             - database
@@ -73,3 +77,4 @@ services:
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
     {%- endfor %}
+    {%- endif %}
