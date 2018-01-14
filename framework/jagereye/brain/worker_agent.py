@@ -18,6 +18,14 @@ class WorkerAgent(object):
         self._typename = typename
         self._mem_db = mem_db
 
+    def _get_search_key(self, analyzer_id=None, worker_id=None):
+        if not analyzer_id:
+            analyzer_id = '*'
+        if not worker_id:
+            worker_id = '*'
+        search_key = 'anal_worker:{}:{}:{}'.format(self._typename, analyzer_id, worker_id)
+        return search_key
+
     async def is_existed(self, analyzer_id):
         """ check if the worker for the analyzer is existed
 
@@ -27,7 +35,7 @@ class WorkerAgent(object):
         Returns:
             bool: True for exist, False for non-exist
         """
-        worker_res = await self._mem_db.keys('anal_worker:{}:*'.format(analyzer_id))
+        worker_res = await self._mem_db.keys(self._get_search_key(analyzer_id=analyzer_id))
         if worker_res:
             return True
         else:
@@ -45,7 +53,7 @@ class WorkerAgent(object):
 
         worker_state = WorkerStatus.CREATE.name
         # create an placeholder entry in worker table
-        anal_worker_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
+        anal_worker_id = self._get_search_key(worker_id='placeholder',analyzer_id=analyzer_id)
         timestamp = round(time.time())
         worker_info = {
             'status': worker_state,
@@ -66,23 +74,21 @@ class WorkerAgent(object):
         """
         anal_worker_id = None
         if (worker_id and analyzer_id):
-            anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
+            anal_worker_id = self._get_search_key(analyzer_id=analyzer_id, worker_id=worker_id)
         elif worker_id:
             # TODO(Ray): check 'result', error handler
-            result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
+            result = await self._mem_db.keys(self._get_search_key(worker_id=worker_id))
             if not result:
                 return None
-
             anal_worker_id = (result[0]).decode()
-            analyzer_id = anal_worker_id.split(':')[1]
+            analyzer_id = anal_worker_id.split(':')[2]
         elif analyzer_id:
             # TODO(Ray): check 'result', error handler
-            result = await self._mem_db.keys('anal_worker:{}:*'.format(analyzer_id))
+            result = await self._mem_db.keys(self._get_search_key(analyzer_id=analyzer_id))
             if not result:
                 return None
-
             anal_worker_id = (result[0]).decode()
-            worker_id = anal_worker_id.split(':')[2]
+            worker_id = anal_worker_id.split(':')[3]
         else:
             # TODO(Ray): if both worker_id and analyzer_id are implicit false (like None, empty str, [], {})
             #           ,need error handler
@@ -104,7 +110,7 @@ class WorkerAgent(object):
         Returns:
             string: analyzer id
         """
-        result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
+        result = await self._mem_db.keys(self._get_search_key(worker_id=worker_id))
         anal_worker_id = (result[0]).decode()
         # retrieve analyzer_id
         analyzer_id = anal_worker_id.split(':')[1]
@@ -122,7 +128,7 @@ class WorkerAgent(object):
         Returns:
             bool: True for success, False otherwise
         """
-        result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
+        result = await self._mem_db.keys(self._get_search_key(worker_id=worker_id))
         # TODO(Ray): what if no anal_worker_id
         anal_worker_id = result[0]
         worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
@@ -142,7 +148,7 @@ class WorkerAgent(object):
         Returns:
             bool: True for success, False otherwise
         """
-        result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
+        result = await self._mem_db.keys(self._get_search_key(worker_id=worker_id))
         # TODO(Ray): what if no anal_worker_id
         anal_worker_id = result[0]
         worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
@@ -163,9 +169,9 @@ class WorkerAgent(object):
         # update the anal_worker record:
         # retrieve the original anal_worker record
         # TODO(Ray): confirm that the result must have 1 element
-        ori_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
+        ori_id = self._get_search_key(worker_id='placeholder',analyzer_id=analyzer_id)
         worker_obj = jsonify(await self._mem_db.get(ori_id))
-        anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
+        anal_worker_id = self._get_search_key(analyzer_id=analyzer_id, worker_id=worker_id)
 
         # append a new anal_worker record with worker_id
         await self._mem_db.set(anal_worker_id, str(worker_obj))
@@ -176,7 +182,7 @@ class WorkerAgent(object):
         """Examine if each workers is alive
 
         """
-        anal_worker_ids = await self._mem_db.keys('anal_worker:*')
+        anal_worker_ids = await self._mem_db.keys(self._get_search_key())
         # if no worker exist, then no need to examine
         if not anal_worker_ids:
             return

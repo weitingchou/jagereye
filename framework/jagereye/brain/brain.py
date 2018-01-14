@@ -234,7 +234,6 @@ class Brain(object):
                         }
                         await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
                         await self._nats_cli.subscribe(ch_worker_to_brain, cb=self._private_worker_handler)
-
                     else:
                         logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
                                 format(get_func_name(), worker_obj['status']))
@@ -266,7 +265,6 @@ class Brain(object):
             return
 
         analyzer_id = msg['params']['id']
-
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
             # TODO(Ray): error handler, if analyzer_id not existed
             worker_obj = await self._worker_agent.get_info(analyzer_id=analyzer_id)
