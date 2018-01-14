@@ -191,9 +191,9 @@ class WorkerAgent(object):
         for anal_worker_id, worker_obj in zip(anal_worker_ids, worker_objs):
             # TODO(Ray):error handler
             worker_obj = jsonify(worker_obj)
-            if worker_obj['status'] == WorkerStatus.RUNNING.name \
+            if worker_obj['status'] == WorkerStatus.READY.name \
                     or worker_obj['status'] == WorkerStatus.RUNNING.name:
-                if (float(timestamp - worker_obj['last_hbeat'])) > threshold:
+                if (timestamp - float(worker_obj['last_hbeat'])) > float(threshold):
                     # TODO(Ray): logging policy need to be redefine
                     logging.error('worker {} is down'.format(anal_worker_id))
                     # change status to DOWN
