@@ -234,7 +234,6 @@ class Brain(object):
                         }
                         await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
                         await self._nats_cli.subscribe(ch_worker_to_brain, cb=self._private_worker_handler)
-
                     else:
                         logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
                                 format(get_func_name(), worker_obj['status']))
@@ -266,27 +265,20 @@ class Brain(object):
             return
 
         analyzer_id = msg['params']['id']
-
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
             # TODO(Ray): error handler, if analyzer_id not existed
             worker_obj = await self._worker_agent.get_info(analyzer_id=analyzer_id)
             if worker_obj:
+                # extract enabled pipelines
                 pipelines = []
-                # TODO(Ray): how to confirm it is really enabled, and it may need pipeline_staus.json?
+                # TODO(Ray): how to confirm pipelines are really enabled?
                 for pipe in worker_obj['pipelines']:
                     pipelines.append({'name': pipe['name'], 'status': 'enabled'})
-                reply_msg = {
-                    'command': MESSAGES['ch_api_brain_reply']['REPLY_ANALYZER_STATUS'],
-                    'status':worker_obj['status'],
-                    'params':{
-                        'id': analyzer_id,
-                        'pipelines': pipelines
-                    }
-                }
+
+                return await self._nats_cli.publish(reply, \
+                        jsondumps(self._API.reply_status(worker_obj['status'], pipelines)))
             else:
-                reply_msg = {
-                    'command': MESSAGES['ch_api_brain_reply']['NOT_FOUND'],
-                }
+                return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_found()).encode())
             await self._nats_cli.publish(reply, str(reply_msg).encode())
 
         elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
@@ -310,9 +302,7 @@ class Brain(object):
                     return
                 logging.debug('Create a worker for analyzer "{}"'.format(analyzer_id))
                 # reply back to api_server
-                status_obj = { 'result': self._API.anal_status_obj(WorkerStatus.CREATE.name) }
-                # TODO(Ray): need to abstract
-                await self._nats_cli.publish(reply, jsondumps(status_obj).encode())
+                await self._nats_cli.publish(reply, jsondumps(self._API.reply_status(WorkerStatus.CREATE.name)).encode())
 
                 ticket_id = ticket.gen_key(analyzer_id)
                 # request resource manager to launch a worker
