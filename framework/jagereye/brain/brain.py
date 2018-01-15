@@ -11,6 +11,7 @@ from jagereye.brain.event_agent import EventAgent
 from jagereye.brain.worker_agent import WorkerAgent
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
+from jagereye.util import timer
 from jagereye.util import logging
 from jagereye.util import static_util
 from jagereye.util.generic import get_func_name
@@ -25,6 +26,9 @@ CH_PUBLIC_BRAIN = "ch_brain"
 
 CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
+
+EXAMINE_INTERVAL = 6
+EXAMINE_THREASHOLD = 10
 
 class Brain(object):
     """Brain the base class for brain service.
@@ -86,6 +90,8 @@ class Brain(object):
         await self._nats_cli.subscribe(CH_API_TO_BRAIN, cb=self._api_handler)
         await self._nats_cli.subscribe(CH_PUBLIC_BRAIN, cb=self._public_brain_handler)
         await self._nats_cli.subscribe(CH_RES_TO_BRAIN, cb=self._res_handler)
+
+        timer.Timer(EXAMINE_INTERVAL, self._worker_agent.examine_all_workers, EXAMINE_THREASHOLD)
 
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers
@@ -150,11 +156,13 @@ class Brain(object):
                 ticket_id = context['ticket']['ticket_id']
                 worker_id = context['workerID']
                 analyzer_id = context['analyzer_id']
+                pipelines = context['ticket']['msg']['params']['pipelines']
+
                 worker_obj = await self._worker_agent.get_info(worker_id=worker_id, analyzer_id=analyzer_id)
                 # check if  worker status is 'CONFIG'
                 if worker_obj['status'] == WorkerStatus.CONFIG.name:
                     # update the status to RUNNING
-                    await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name)
+                    await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name, pipelines)
                     # delete ticket
                     await self._ticket_agent.delete(ticket_id)
                 else:
@@ -177,8 +185,10 @@ class Brain(object):
 
                 # TODO: Send events back to notification service.
             elif verb == 'hbeat':
-                # TODO: need to update to DB
+                worker_id = context['workerID']
                 logging.debug('hbeat: {}'.format(str(msg)))
+                # TODO: error handler
+                await self._worker_agent.update_last_hbeat(worker_id)
 
     async def _public_brain_handler(self, recv):
         """asychronous handler for public channel all initial workers
@@ -224,7 +234,6 @@ class Brain(object):
                         }
                         await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
                         await self._nats_cli.subscribe(ch_worker_to_brain, cb=self._private_worker_handler)
-
                     else:
                         logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
                                 format(get_func_name(), worker_obj['status']))
@@ -256,10 +265,21 @@ class Brain(object):
             return
 
         analyzer_id = msg['params']['id']
-
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
-            # TODO: Return application status
-            await self._nats_cli.publish(reply, str("It is running").encode())
+            # TODO(Ray): error handler, if analyzer_id not existed
+            worker_obj = await self._worker_agent.get_info(analyzer_id=analyzer_id)
+            if worker_obj:
+                # extract enabled pipelines
+                pipelines = []
+                # TODO(Ray): how to confirm pipelines are really enabled?
+                for pipe in worker_obj['pipelines']:
+                    pipelines.append({'name': pipe['name'], 'status': 'enabled'})
+
+                return await self._nats_cli.publish(reply, \
+                        jsondumps(self._API.reply_status(worker_obj['status'], pipelines)))
+            else:
+                return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_found()).encode())
+            await self._nats_cli.publish(reply, str(reply_msg).encode())
 
         elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
             context = {'msg': msg, 'reply': reply, 'timestamp': timestamp}
@@ -282,9 +302,7 @@ class Brain(object):
                     return
                 logging.debug('Create a worker for analyzer "{}"'.format(analyzer_id))
                 # reply back to api_server
-                status_obj = { 'result': self._API.anal_status_obj(WorkerStatus.CREATE.name) }
-                # TODO(Ray): need to abstract
-                await self._nats_cli.publish(reply, jsondumps(status_obj).encode())
+                await self._nats_cli.publish(reply, jsondumps(self._API.reply_status(WorkerStatus.CREATE.name)).encode())
 
                 ticket_id = ticket.gen_key(analyzer_id)
                 # request resource manager to launch a worker
