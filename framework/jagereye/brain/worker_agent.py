@@ -50,14 +50,15 @@ class WorkerAgent(object):
         Returns:
             bool: True for success, False otherwise
         """
+        mset_cmds = []
         # set 'workerId' field in analyzer table
-        await self._mem_db.set(self._get_anal_key(anal_id), worker_id)
-
+        mset_cmds.extend([self._get_anal_key(anal_id), worker_id])
         # set 'status', 'pipelines', 'analyzerId' fields in worker table
-        await self._mem_db.set(self._get_worker_key(worker_id, 'status'), WorkerStatus.INITIAL.name)
-        await self._mem_db.set(self._get_worker_key(worker_id, 'pipelines'), str([]))
-        await self._mem_db.set(self._get_worker_key(worker_id, 'analyzerId'), anal_id)
+        mset_cmds.extend([self._get_worker_key(worker_id, 'status'), WorkerStatus.INITIAL.name])
+        mset_cmds.extend([self._get_worker_key(worker_id, 'pipelines'), str([])])
+        mset_cmds.extend([self._get_worker_key(worker_id, 'analyzerId'), anal_id])
 
+        await self._mem_db.mset(*mset_cmds)
         # TODO(Ray): error handler: what if set failed?
         return True
 
