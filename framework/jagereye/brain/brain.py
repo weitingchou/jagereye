@@ -163,9 +163,11 @@ class Brain(object):
                     logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
                             format(get_func_name, worker_obj['status']))
                     return
-
                 # update the status to RUNNING
                 await self._worker_agent.update_status(WorkerStatus.RUNNING.name, worker_id=worker_id)
+                # update pipelines
+                await self._worker_agent.update_pipelines(pipelines, worker_id=worker_id)
+
                 # delete ticket
                 await self._ticket_agent.delete(ticket_id)
             elif verb == 'event':
@@ -234,8 +236,8 @@ class Brain(object):
                         'verb': 'hshake-2',
                         'context': context
                     }
-                    await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
                     await self._nats_cli.subscribe(ch_worker_to_brain, cb=self._private_worker_handler)
+                    await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
 
     async def _api_handler(self, recv):
         """asychronous handler for listen cmd from api server

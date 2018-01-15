@@ -93,6 +93,14 @@ class WorkerAgent(object):
             return None
         return (await self._mem_db.set(key, status))
 
+    async def update_pipelines(self, pipelines, worker_id):
+        # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?
+        key = None
+        if not worker_id:
+            return
+        key = self._get_worker_key(worker_id, 'pipelines')
+        return (await self._mem_db.set(key, str(pipelines)))
+
     async def get_anal_id(self, worker_id):
         """Get analyzer ID by worker ID.
 
