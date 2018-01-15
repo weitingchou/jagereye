@@ -5,6 +5,7 @@
         "STOP_ANALYZER": "stop analyzer"
     },
     "ch_api_brain_reply": {
+        "REPLY_ANALYZER_STATUS": "reply analyzer status",
         "NOT_AVAILABLE": "not available",
         "NOT_FOUND": "not found"
     },

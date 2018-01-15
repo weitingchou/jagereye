@@ -8,7 +8,7 @@ import time
 import json
 from enum import Enum
 
-from jagereye.worker.timer import Timer
+from jagereye.util import timer
 from jagereye.util import logging
 
 # public brain channel 
@@ -92,7 +92,7 @@ class Worker(object):
                 self._status = STATUS.READY
                 # finish handshake, so register heartbeater
                 # trigger heartbeat in 2 sec interval
-                hbeat_timer = Timer(2, self._hbeat_publisher)
+                hbeat_timer = timer.Timer(2, self._hbeat_publisher)
                 await self._nats_cli.publish(self._ch_worker_to_brain, str(hshake_3_req).encode())
 
         if (verb == "config") and (self._status == STATUS.READY):
