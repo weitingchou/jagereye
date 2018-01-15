@@ -62,6 +62,30 @@ class WorkerAgent(object):
         # TODO(Ray): error handler: what if set failed?
         return True
 
+    async def get_info(self, anal_id=None, worker_id=None):
+        # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?
+        if worker_id:
+            pass
+        elif anal_id:
+            # get worker_id by anal_id
+            worker_id = await self._mem_db.get(self._get_anal_key(anal_id))
+            worker_id = worker_id.decode()
+            # TODO(Ray): if worker_id not exist, error handler
+            if not worker_id:
+                return None
+        else:
+            return None
+        # mget 'status', 'pipelines'
+        mget_cmds = []
+        mget_cmds.append(self._get_worker_key(worker_id, 'status'))
+        mget_cmds.append(self._get_worker_key(worker_id, 'pipelines'))
+        result = await self._mem_db.mget(*mget_cmds)
+        status = result[0].decode()
+        pipelines = jsonify(result[1].decode())
+        return status, pipelines
+
+
+
     async def get_status(self, anal_id=None, worker_id=None):
         # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?
         key = None
@@ -70,6 +94,7 @@ class WorkerAgent(object):
         elif anal_id:
             # get worker_id by anal_id
             worker_id = await self._mem_db.get(self._get_anal_key(anal_id))
+            worker_id = worker_id.decode()
             # TODO(Ray): if worker_id not exist, error handler
             if not worker_id:
                 return None

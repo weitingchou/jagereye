@@ -268,20 +268,14 @@ class Brain(object):
         analyzer_id = msg['params']['id']
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
             # TODO(Ray): error handler, if analyzer_id not existed
-            worker_obj = await self._worker_agent.get_info(analyzer_id=analyzer_id)
-            if worker_obj:
-                # extract enabled pipelines
-                pipelines = []
-                # TODO(Ray): how to confirm pipelines are really enabled?
-                for pipe in worker_obj['pipelines']:
-                    pipelines.append({'name': pipe['name'], 'status': 'enabled'})
-
+            status, pipelines = await self._worker_agent.get_info(anal_id=analyzer_id)
+            # TODO(Ray): check if in WorkerStatus
+            if status:
                 return await self._nats_cli.publish(reply, \
-                        jsondumps(self._API.reply_status(worker_obj['status'], pipelines)))
+                        jsondumps(self._API.reply_status(status, pipelines)).encode())
             else:
                 return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_found()).encode())
-            await self._nats_cli.publish(reply, str(reply_msg).encode())
-
+            return await self._nats_cli.publish(reply, str(reply_msg).encode())
         elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
             context = {'msg': msg, 'reply': reply, 'timestamp': timestamp}
             if (await self._ticket_agent.set(analyzer_id, context)) == 0:
