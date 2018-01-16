@@ -150,7 +150,7 @@ async function removeWorkerRecord(workerId) {
 }
 
 // Helper function for replying to brain.
-function replyBrain(originRequest, reply) {
+function replyBrain(reply) {
     const replyStr = JSON.stringify(reply);
     nats.request(CH_RES_TO_BRAIN, replyStr);
     console.log(`Reply to brain: ${replyStr}`);
@@ -161,7 +161,7 @@ function replyBrainResponse(originRequest, response) {
     const reply = merge({}, originRequest, {
         response,
     });
-    replyBrain(originRequest, reply);
+    replyBrain(reply);
 }
 
 // Helper function for replying error to brain.
@@ -234,6 +234,8 @@ async function brainHandler(msg) {
                 await removeWorker(workerId);
                 // Remove worker status record in memory database
                 await removeWorkerRecord(workerId);
+
+                replyBrainResponse(request, 'OK');
 
                 console.log(`Worker (ID = ${workerId}) has been removed successfully`);
             } catch (e) {
