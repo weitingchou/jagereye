@@ -48,18 +48,18 @@ class EventAgent(object):
             content_ids = result.inserted_ids
         for event,content_id in zip(events,content_ids):
             content_id = str(content_id)
-            event_camelCase = {
+            base_event = {
                     'analyzerId': analyzer_id,
                     'timestamp': event['timestamp'],
                     'type': event['type'],
                     'appName': event['app_name'],
                     'contentId': content_id
-                    }
-            if not validator.is_valid(event_camelCase):
-                logging.error('Fail validation for event {}'.format(event_camelCase))
+            }
+            if not validator.is_valid(base_event):
+                logging.error('Fail validation for event {}'.format(base_event))
             else:
-                event_camelCase['date'] = datetime.datetime.fromtimestamp(event_camelCase['timestamp'])
-                valid_events.append(event_camelCase)
+                base_event['date'] = datetime.datetime.fromtimestamp(base_event['timestamp'])
+                valid_events.append(base_event)
         if valid_events:
             # TODO(Ray): error handler and logging if insert failed
             result  = self._event_db.insert_many(valid_events)
