@@ -76,6 +76,7 @@ class Brain(object):
         self._event_db_name = event_db_name
         db_cli = MongoClient(self._event_db_host)
         self._event_db = db_cli[self._event_db_name]['events']
+        self._app_event_db = db_cli[self._event_db_name]['events_{}'.format(self._typename)]
 
     async def _setup(self):
         """register all handler
@@ -84,7 +85,7 @@ class Brain(object):
         # TODO(Ray): both are mem db operations, need to be abstracted, or redesign
         self._mem_db_cli = await aioredis.create_redis(self._mem_db_host, loop=self._main_loop)
 
-        self._event_agent = EventAgent(self._typename, self._mem_db_cli, self._event_db)
+        self._event_agent = EventAgent(self._typename, self._mem_db_cli, self._event_db, self._app_event_db)
         self._worker_agent = WorkerAgent(self._typename, self._mem_db_cli)
         self._ticket_agent = ticket.TicketAgent(self._mem_db_cli)
 
@@ -127,7 +128,7 @@ class Brain(object):
                 worker_status = await self._worker_agent.get_status(worker_id=worker_id)
                 if worker_status != WorkerStatus.HSHAKE_1.name:
                     logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
-                            format(get_func_name(), worker_obj['status']))
+                            format(get_func_name(), worker_status))
                     return
                 # update worker status to READY
                 await self._worker_agent.update_status(WorkerStatus.READY.name, worker_id=worker_id)
@@ -163,7 +164,7 @@ class Brain(object):
                 if worker_status != WorkerStatus.CONFIG.name:
                     # TODO(Ray): when status not correct, what to do?
                     logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
-                            format(get_func_name, worker_obj['status']))
+                            format(get_func_name, worker_status))
                     return
                 # update the status to RUNNING
                 await self._worker_agent.update_status(WorkerStatus.RUNNING.name, worker_id=worker_id)

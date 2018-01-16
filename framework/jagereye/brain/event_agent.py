@@ -2,6 +2,8 @@ import aioredis
 import json
 import os, datetime
 
+from pymongo.errors import OperationFailure as MongoOperationFailure
+
 from jsonschema import Draft4Validator as Validator
 from jagereye.brain.utils import jsonify
 from jagereye.util import logging
@@ -11,12 +13,12 @@ from jagereye.util import static_util
 with open(static_util.get_path('event.json'), 'r') as f:
     validator = Validator(json.loads(f.read()))
 
-
 class EventAgent(object):
-    def __init__(self, typename, mem_db, db):
+    def __init__(self, typename, mem_db, event_db, app_event_db):
         self._typename = typename
         self._mem_db = mem_db
-        self._db = db
+        self._event_db = event_db
+        self._app_event_db = app_event_db
 
     def save_in_db(self, events, analyzer_id):
         """Save events into presistent db
@@ -30,16 +32,37 @@ class EventAgent(object):
         """
         # validate
         valid_events = []
+        contents = []
         for event in events:
-            event['analyzer_id'] = analyzer_id
-            if not validator.is_valid(event):
-                logging.error('Fail validation for event {}'.format(event))
+            contents.append(event['content'])
+        # save all contents in self._app_event_db
+        try:
+            result  = self._app_event_db.insert_many(contents)
+        except MongoOperationFailure as e:
+            # TODO(Ray): error handler,
+            # refered to https://stackoverflow.com/questions/35191042/get-inserted-ids-after-failed-insert-many
+            # not yet test
+            logging.error('{} error happened when save in db'.format(e))
+            return False
+        else:
+            content_ids = result.inserted_ids
+        for event,content_id in zip(events,content_ids):
+            content_id = str(content_id)
+            base_event = {
+                    'analyzerId': analyzer_id,
+                    'timestamp': event['timestamp'],
+                    'type': event['type'],
+                    'appName': event['app_name'],
+                    'contentId': content_id
+            }
+            if not validator.is_valid(base_event):
+                logging.error('Fail validation for event {}'.format(base_event))
             else:
-                event['date'] = datetime.datetime.fromtimestamp(event['timestamp'])
-                valid_events.append(event)
+                base_event['date'] = datetime.datetime.fromtimestamp(base_event['timestamp'])
+                valid_events.append(base_event)
         if valid_events:
             # TODO(Ray): error handler and logging if insert failed
-            self._db.insert_many(valid_events)
+            result  = self._event_db.insert_many(valid_events)
 
     async def consume_from_worker(self, worker_id):
         """Get event array by worker ID.
