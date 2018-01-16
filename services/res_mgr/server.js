@@ -21,6 +21,7 @@ const CONTAINER_SHARED_DIR = '/root/jagereye_shared';
 const WORKER_STATUS = {
     CREATING: 'CREATING',
     RUNNING: 'RUNNING',
+    REMOVED: 'REMOVED',
 };
 
 // The Messaging format.
@@ -235,7 +236,9 @@ async function brainHandler(msg) {
                 // Remove worker status record in memory database
                 await removeWorkerRecord(workerId);
 
-                replyBrainResponse(request, 'OK');
+                replyBrainResponse(request, {
+                    status: WORKER_STATUS.REMOVED,
+                });
 
                 console.log(`Worker (ID = ${workerId}) has been removed successfully`);
             } catch (e) {
