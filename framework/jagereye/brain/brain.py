@@ -11,6 +11,7 @@ from jagereye.brain.event_agent import EventAgent
 from jagereye.brain.worker_agent import WorkerAgent
 from jagereye.brain.status_enum import WorkerStatus
 from jagereye.brain.contract import API, InvalidRequestType, InvalidRequestFormat
+from jagereye.util import timer
 from jagereye.util import logging
 from jagereye.util import static_util
 from jagereye.util.generic import get_func_name
@@ -27,6 +28,9 @@ CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
 
 CH_NOTIFICATION = "ch_notification"
+EXAMINE_INTERVAL = 6
+EXAMINE_THREASHOLD = 10
+
 
 class Brain(object):
     """Brain the base class for brain service.
@@ -89,6 +93,8 @@ class Brain(object):
         await self._nats_cli.subscribe(CH_PUBLIC_BRAIN, cb=self._public_brain_handler)
         await self._nats_cli.subscribe(CH_RES_TO_BRAIN, cb=self._res_handler)
 
+        timer.Timer(EXAMINE_INTERVAL, self._worker_agent.examine_all_workers, EXAMINE_THREASHOLD)
+
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers
 
@@ -116,53 +122,56 @@ class Brain(object):
                 logging.debug('finish handshake')
 
                 # change worker status
-                # TODO(Ray): check 'analyzer_id' in context, maybe need error handler
                 worker_id = context['workerID']
-                analyzer_id = context['analyzer_id']
-                # check worker status is HSHAKE-1?
-                worker_obj = await self._worker_agent.get_info(worker_id=worker_id, analyzer_id=analyzer_id)
-
-                if worker_obj['status'] == WorkerStatus.HSHAKE_1.name:
-                    # update worker status to READY
-                    await self._worker_agent.update_status(worker_id, WorkerStatus.READY.name)
-                    analyzer_id = worker_obj['analyzer_id']
-                    # check if there is a ticket for the analyzer
-                    result = await self._ticket_agent.get(analyzer_id)
-                    if result:
-                        # assign job to worker
-                        context['ticket'] = result
-                        context['ticket']['ticket_id'] = analyzer_id
-                        config_req = {
-                            'verb': 'config',
-                            'context': context
-                        }
-                        # update worker status to CONFIG
-                        await self._worker_agent.update_status(worker_id, WorkerStatus.CONFIG.name)
-                        await self._nats_cli.publish(context['ch_to_worker'], str(config_req).encode())
-                    else:
-                        # no ticket for the analyzer
-                        logging.debug('Receive "hshake3" in {}: no ticket for analyzer {}'.\
-                                format(get_func_name(), analyzer_id))
-                else:
+                # check worker status is HSHAKE-1
+                worker_status = await self._worker_agent.get_status(worker_id=worker_id)
+                if worker_status != WorkerStatus.HSHAKE_1.name:
                     logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
                             format(get_func_name(), worker_obj['status']))
+                    return
+                # update worker status to READY
+                await self._worker_agent.update_status(WorkerStatus.READY.name, worker_id=worker_id)
+                # make listen the worker's heartbeat
+                await self._worker_agent.start_listen_hbeat(worker_id)
+
+                # check if there is a ticket for the worker
+                analyzer_id = await self._worker_agent.get_anal_id(worker_id)
+                result = await self._ticket_agent.get(analyzer_id)
+                if result:
+                    # assign job to worker
+                    context['ticket'] = result
+                    context['ticket']['ticket_id'] = analyzer_id
+                    config_req = {
+                        'verb': 'config',
+                        'context': context
+                    }
+                    # update worker status to CONFIG
+                    await self._worker_agent.update_status(WorkerStatus.CONFIG.name, worker_id=worker_id)
+                    await self._nats_cli.publish(context['ch_to_worker'], str(config_req).encode())
+                else:
+                    # no ticket for the analyzer
+                    logging.debug('Receive "hshake3" in {}: no ticket for analyzer {}'.\
+                            format(get_func_name(), analyzer_id))
             elif verb == 'config_ok':
                 logging.debug('Received "config_ok" in {func}: "{subject} {reply}": {data}'.\
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
                 ticket_id = context['ticket']['ticket_id']
                 worker_id = context['workerID']
-                analyzer_id = context['analyzer_id']
-                worker_obj = await self._worker_agent.get_info(worker_id=worker_id, analyzer_id=analyzer_id)
-                # check if  worker status is 'CONFIG'
-                if worker_obj['status'] == WorkerStatus.CONFIG.name:
-                    # update the status to RUNNING
-                    await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name)
-                    # delete ticket
-                    await self._ticket_agent.delete(analyzer_id)
-                else:
+                pipelines = context['ticket']['msg']['params']['pipelines']
+
+                worker_status = await self._worker_agent.get_status(worker_id=worker_id)
+                if worker_status != WorkerStatus.CONFIG.name:
                     # TODO(Ray): when status not correct, what to do?
                     logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
                             format(get_func_name, worker_obj['status']))
+                    return
+                # update the status to RUNNING
+                await self._worker_agent.update_status(WorkerStatus.RUNNING.name, worker_id=worker_id)
+                # update pipelines
+                await self._worker_agent.update_pipelines(pipelines, worker_id=worker_id)
+
+                # delete ticket
+                await self._ticket_agent.delete(ticket_id)
             elif verb == 'event':
                 worker_id = context['workerID']
                 # retrieve analyzer_id
@@ -181,8 +190,11 @@ class Brain(object):
 
                 # TODO: Send events back to notification service.
             elif verb == 'hbeat':
-                # TODO: need to update to DB
-                logging.debug('hbeat: {}'.format(str(msg)))
+                worker_id = context['workerID']
+                logging.debug('receive hbeat: {}'.format(str(msg)))
+                # TODO: error handler
+                if not (await self._worker_agent.update_hbeat(worker_id)):
+                    logging.debug('failed update hbeat for worker {}'.format(worker_id))
 
     async def _public_brain_handler(self, recv):
         """asychronous handler for public channel all initial workers
@@ -217,21 +229,19 @@ class Brain(object):
                 except Exception as e:
                     logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
                 else:
-                    worker_obj = await self._worker_agent.get_info(worker_id=worker_id)
-                    if worker_obj['status'] == WorkerStatus.INITIAL.name:
-                        # update worker status
-                        context['analyzer_id'] = worker_obj['analyzer_id']
-                        await self._worker_agent.update_status(worker_id, WorkerStatus.HSHAKE_1.name)
-                        hshake_reply = {
-                            'verb': 'hshake-2',
-                            'context': context
-                        }
-                        await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
-                        await self._nats_cli.subscribe(ch_worker_to_brain, cb=self._private_worker_handler)
-
-                    else:
+                    worker_status = await self._worker_agent.get_status(worker_id=worker_id)
+                    if worker_status != WorkerStatus.INITIAL.name:
                         logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
-                                format(get_func_name(), worker_obj['status']))
+                              format(get_func_name(), worker_status))
+                        return
+                    # update worker status
+                    await self._worker_agent.update_status(WorkerStatus.HSHAKE_1.name, worker_id=worker_id)
+                    hshake_reply = {
+                        'verb': 'hshake-2',
+                        'context': context
+                    }
+                    await self._nats_cli.subscribe(ch_worker_to_brain, cb=self._private_worker_handler)
+                    await self._nats_cli.publish(ch_brain_to_worker, str(hshake_reply).encode())
 
     async def _api_handler(self, recv):
         """asychronous handler for listen cmd from api server
@@ -260,23 +270,24 @@ class Brain(object):
             return
 
         analyzer_id = msg['params']['id']
-
         if msg['command'] == MESSAGES['ch_api_brain']['REQ_ANALYZER_STATUS']:
-            # TODO: Return application status
-            await self._nats_cli.publish(reply, str("It is running").encode())
-
+            # TODO(Ray): error handler, if analyzer_id not existed
+            status, pipelines = await self._worker_agent.get_info(anal_id=analyzer_id)
+            # TODO(Ray): check if in WorkerStatus
+            if status:
+                return await self._nats_cli.publish(reply, \
+                        jsondumps(self._API.reply_status(status, pipelines)).encode())
+            else:
+                return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_found()).encode())
+            return await self._nats_cli.publish(reply, str(reply_msg).encode())
         elif msg['command'] == MESSAGES['ch_api_brain']['START_ANALYZER']:
             context = {'msg': msg, 'reply': reply, 'timestamp': timestamp}
-            if await self._ticket_agent.set(analyzer_id, context) == 0:
+            if (await self._ticket_agent.set(analyzer_id, context)) == 0:
                 # ticket already exists for analyzer #id, reject the request
-                # because we allow only one ticket for one write operation of the
-                # same analyzer at the same time
                 return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_aval()).encode())
-
             # check if worker for the analyzer #id exists?
-            # if yes, just re-config worker
-            # if no, request resource manager for launching a worker
-            if (await self._worker_agent.is_existed(analyzer_id)):
+            worker_id = await self._worker_agent.get_worker_id(analyzer_id)
+            if worker_id:
                 # TODO(Ray): if yes, just re-config worker
                 logging.debug('worker exists, re-configure it')
                 # XXX: We haven't implement woker reconfiguring yet, so we need
@@ -284,19 +295,14 @@ class Brain(object):
                 # operations on analyzer 'analyzer_id'.
                 await self._ticket_agent.delete(analyzer_id)
             else:
-                # no worker, request resource manager for launching a new worker
-                if not (await self._worker_agent.create_worker(analyzer_id)):
-                    logging.debug('Create a worker failed for analyzer "{}" in {}'.format(analyzer_id, get_func_name()))
-                    return
                 logging.debug('Create a worker for analyzer "{}"'.format(analyzer_id))
                 # reply back to api_server
-                status_obj = { 'result': self._API.anal_status_obj(WorkerStatus.CREATE.name) }
-                # TODO(Ray): need to abstract
-                await self._nats_cli.publish(reply, jsondumps(status_obj).encode())
-
+                await self._nats_cli.publish(reply, jsondumps(self._API.reply_status(WorkerStatus.CREATE.name)).encode())
+                ticket_id = analyzer_id
                 # request resource manager to launch a worker
                 req = {
                     'command': MESSAGES['ch_brain_res']['CREATE_WORKER'],
+                    'ticketId': ticket_id,
                     'analyzerId': analyzer_id,
                     'params': {
                         # TODO: For running multiple brain instances, the id
@@ -357,13 +363,13 @@ class Brain(object):
             # whenver the resource manager create a worker for the brain
             # then inform to brain
             worker_id = msg['response']['workerId']
+            analyzer_id = msg['analyzerId']
 
             logging.info('Receive launch ok in {} for worker "{}":analyzer "{}"'.
                     format(get_func_name(), worker_id, analyzer_id))
-            await self._worker_agent.update_worker_id(analyzer_id, worker_id)
-            await self._worker_agent.update_status(worker_id, WorkerStatus.INITIAL.name)
+            await self._worker_agent.create_analyzer(analyzer_id, worker_id)
         elif msg['command'] == MESSAGES['ch_brain_res']['REMOVE_WORKER']:
-            # TODO: handle error by chekcing response message, if remove failed
+            # TODO: handle error by chekcing response message if it failed
             await self._ticket_agent.delete(analyzer_id)
 
     def start(self):

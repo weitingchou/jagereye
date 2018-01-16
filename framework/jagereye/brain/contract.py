@@ -39,27 +39,48 @@ class API():
             logging.error('KeyError: {}'.format(e))
             raise InvalidRequestFormat
 
-    def anal_status_obj(self, status):
+    def reply_status(self, status, pipelines=None):
+        """ return a dict for reply status to api server
+
+        Args:
+             status (string): required, the new worker status.
+                 The status should be 'create', 'initial', 'hshake_1', 'config', 'ready','running' and 'down'.
+             pipelines (list of dict): optional, the enabled pipelines with parameters
+        Returns:
+            dict: msg for reply to api server
+        """
+
         obj = {
-            'type': self._typename,
-            'status': status
+            'result': {
+                'code': self._msg_r['REPLY_ANALYZER_STATUS'],
+                'type': self._typename,
+                'status': status
+            }
         }
+        if pipelines:
+            obj['pipelines'] = pipelines
         return obj
 
     def reply_not_aval(self):
         obj = {
-            'code': self._msg_r['NOT_AVAILABLE']
+            'error': {
+                'code': self._msg_r['NOT_AVAILABLE']
+            }
         }
         return obj
 
     def reply_not_found(self):
         obj = {
-            'code': self._msg_r['NOT_FOUND']
+            'error': {
+                'code': self._msg_r['NOT_FOUND']
+            }
         }
         return obj
 
     def reply_no_op(self):
         obj = {
-            'code': self._msg_r['NO_OP']
+            'error': {
+                'code': self._msg_r['NO_OP']
+            }
         }
         return obj
