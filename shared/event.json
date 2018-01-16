@@ -1,20 +1,23 @@
 {
-  "title": "event_db",
+  "title": "eventDB",
   "type": "object",
   "properties": {
-    "analyzer_id": {
+    "analyzerId": {
       "type": "string"
     },
     "timestamp": {
       "type": "number"
     },
-    "name": {
+    "appName": {
       "type": "string"
     },
-    "content": {
-      "type": "object"
+    "type": {
+      "type": "string"
+    },
+    "contentId": {
+      "type": "string"
     }
   },
   "additionalProperties": false,
-  "required":["analyzer_id", "timestamp", "name", "content"]
+  "required":["analyzerId", "timestamp", "appName", "contentId", "type"]
 }
