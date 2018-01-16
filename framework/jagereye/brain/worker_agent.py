@@ -195,5 +195,4 @@ class WorkerAgent(object):
                 logging.debug('worker {} is down'.format(status_key.decode().replace(':status', '')))
                 # change the staus to DOWN
                 #TODO(Ray): error handler
-                print(status_key)
                 await self._mem_db.set(status_key, WorkerStatus.DOWN.name)
