@@ -27,11 +27,10 @@ function notifying(event, callback) {
     })
 }
 
-function notificationHandler(request, replyTo) {
-    nats.publish(replyTo, 'OK')
+function notificationHandler(request) {
     notifying(request, (err) => {
         if (err) {
-            /* TODO: log error */
+            return console.error(err)
         }
     })
 }
@@ -43,7 +42,9 @@ function init(_server, _settings) {
 
 function start() {
     let path = settings.path || '/notification'
-    wsServer = new WebSocket.Server({server: server, path: path})
+    wsServer = new WebSocket.Server({server: server, path: path, headers: {
+        "Access-Control-Allow-Origin": "*"
+    }})
     wsServer.on('connection', (ws) => {
         ws.isAlive = true
         ws.on('pong', () => {
