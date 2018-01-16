@@ -16,7 +16,7 @@ const CH_API_BRAIN = 'ch_api_brain'
  * Projections
  */
 const getConfProjection = {
-    '_id': 0,
+    '_id': 1,
     'name': 1,
     'type': 1,
     'enabled': 1,
@@ -129,16 +129,7 @@ function requestBrain(request, timeout, callback) {
 }
 
 function getAllAnalyzerConfig(req, res, next) {
-    const searchQuery = req.query['search']
-    let query = {}
-    switch (searchQuery) {
-        case 'enabled':
-            query['enabled'] = true
-            break
-        default:
-            return next(createError(400, `Invalid search query: ${searchQuery}`))
-    }
-    models['analyzers'].find(query, getConfProjection, (err, list) => {
+    models['analyzers'].find({}, getConfProjection, (err, list) => {
         if (err) { return next(createError(500, null, err)) }
         res.send(list)
     })
