@@ -26,6 +26,8 @@ CH_PUBLIC_BRAIN = "ch_brain"
 CH_BRAIN_TO_RES = "ch_brain_res"
 CH_RES_TO_BRAIN = "ch_res_brain"
 
+CH_NOTIFICATION = "ch_notification"
+
 class Brain(object):
     """Brain the base class for brain service.
 
@@ -156,7 +158,7 @@ class Brain(object):
                     # update the status to RUNNING
                     await self._worker_agent.update_status(worker_id, WorkerStatus.RUNNING.name)
                     # delete ticket
-                    await self._ticket_agent.delete(ticket_id)
+                    await self._ticket_agent.delete(analyzer_id)
                 else:
                     # TODO(Ray): when status not correct, what to do?
                     logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
@@ -171,7 +173,9 @@ class Brain(object):
                 if not events:
                     return
 
+                logging.info('Received events: {}'.format(events))
                 self._event_agent.save_in_db(events, analyzer_id)
+                await self._nats_cli.publish(CH_NOTIFICATION, str(events).encode())
 
                 logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
 
@@ -275,6 +279,10 @@ class Brain(object):
             if (await self._worker_agent.is_existed(analyzer_id)):
                 # TODO(Ray): if yes, just re-config worker
                 logging.debug('worker exists, re-configure it')
+                # XXX: We haven't implement woker reconfiguring yet, so we need
+                # to delete ticket here, otherwise it will block future
+                # operations on analyzer 'analyzer_id'.
+                await self._ticket_agent.delete(analyzer_id)
             else:
                 # no worker, request resource manager for launching a new worker
                 if not (await self._worker_agent.create_worker(analyzer_id)):
@@ -286,11 +294,10 @@ class Brain(object):
                 # TODO(Ray): need to abstract
                 await self._nats_cli.publish(reply, jsondumps(status_obj).encode())
 
-                ticket_id = ticket.gen_key(analyzer_id)
                 # request resource manager to launch a worker
                 req = {
                     'command': MESSAGES['ch_brain_res']['CREATE_WORKER'],
-                    'ticketId': ticket_id,
+                    'analyzerId': analyzer_id,
                     'params': {
                         # TODO: For running multiple brain instances, the id
                         #       should combine with a brain id to create a
@@ -309,7 +316,20 @@ class Brain(object):
                 # because we allow only one ticket for one write operation of the
                 # same analyzer at the same time
                 return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_aval()).encode())
-            await self._nats_cli.publish(reply, str("It is stoping").encode())
+
+            worker_id = await self._worker_agent.get_worker_id(analyzer_id)
+            if not worker_id:
+                return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_found()).encode())
+
+            # request resource manager to remove a worker
+            req = {
+                'command': MESSAGES['ch_brain_res']['REMOVE_WORKER'],
+                'analyzerId': analyzer_id,
+                'params': {
+                    'workerId': worker_id
+                }
+            }
+            await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
         else:
             logging.error('Undefined command: {}'.format(msg['command']))
 
@@ -331,16 +351,20 @@ class Brain(object):
                           .format(msg['error']['code']))
             return
 
+        analyzer_id = msg['analyzerId']
+
         if msg['command'] == MESSAGES['ch_brain_res']['CREATE_WORKER']:
             # whenver the resource manager create a worker for the brain
             # then inform to brain
             worker_id = msg['response']['workerId']
-            analyzer_id = msg['ticketId'].replace('ticket:', '')   # we use analyzer ID as ticket ID
 
             logging.info('Receive launch ok in {} for worker "{}":analyzer "{}"'.
                     format(get_func_name(), worker_id, analyzer_id))
             await self._worker_agent.update_worker_id(analyzer_id, worker_id)
             await self._worker_agent.update_status(worker_id, WorkerStatus.INITIAL.name)
+        elif msg['command'] == MESSAGES['ch_brain_res']['REMOVE_WORKER']:
+            # TODO: handle error by chekcing response message, if remove failed
+            await self._ticket_agent.delete(analyzer_id)
 
     def start(self):
         self._main_loop.run_until_complete(self._setup())
