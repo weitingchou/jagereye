@@ -18,76 +18,114 @@ class WorkerAgent(object):
         self._typename = typename
         self._mem_db = mem_db
 
-    async def is_existed(self, analyzer_id):
+    def _get_anal_key(self, anal_id):
+        return '{}:anal:{}'.format(self._typename, anal_id)
+
+    def _get_worker_key(self, worker_id, field):
+        # TODO(Ray): field only allow 'status', 'pipelines', 'hbeat', 'analyzerId'
+        return '{}:worker:{}:{}'.format(self._typename, worker_id, field)
+
+    async def get_worker_id(self, anal_id):
         """ check if the worker for the analyzer is existed
 
         Args:
-            analyzer_id (string): analyzer id
+            anal_id (string): analyzer id
 
         Returns:
-            bool: True for exist, False for non-exist
+            string: worker_id, and None for non-exist
         """
-        worker_res = await self._mem_db.keys('anal_worker:{}:*'.format(analyzer_id))
-        if worker_res:
-            return True
+        key = 'anal:{}:workerId'.format(anal_id)
+        result = await self._mem_db.get(key)
+        if result:
+            return result
         else:
-            return False
+            return None
 
-    async def create_worker(self, analyzer_id):
-        """Create a initial worker record
+    async def create_analyzer(self, anal_id, worker_id):
+        """Create a initial analyzer record
 
         Args:
-            analyzer_id (string): analyzer id
-
+            anal_id (string): analyzer id
+            worker_id (string): worker id
         Returns:
             bool: True for success, False otherwise
         """
+        mset_cmds = []
+        # set 'workerId' field in analyzer table
+        mset_cmds.extend([self._get_anal_key(anal_id), worker_id])
+        # set 'status', 'pipelines', 'analyzerId' fields in worker table
+        mset_cmds.extend([self._get_worker_key(worker_id, 'status'), WorkerStatus.INITIAL.name])
+        mset_cmds.extend([self._get_worker_key(worker_id, 'pipelines'), str([])])
+        mset_cmds.extend([self._get_worker_key(worker_id, 'analyzerId'), anal_id])
 
-        worker_state = WorkerStatus.CREATE.name
-        # create an placeholder entry in worker table
-        anal_worker_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
-        timestamp = round(time.time())
-        worker_info = {
-            'status': worker_state,
-            'last_hbeat': timestamp,
-            'pipelines': []
-        }
-        return (await self._mem_db.set(anal_worker_id, str(worker_info)))
+        await self._mem_db.mset(*mset_cmds)
+        # TODO(Ray): error handler: what if set failed?
+        return True
 
-    async def get_info(self, worker_id=None, analyzer_id=None):
-        """Get worker info by worker ID or analyzer ID
-
-        Args:
-            analyzer_id (string): analyzer_id
-            worker_id (string): worker id
-
-        Returns:
-            dict: worker information
-        """
-        anal_worker_id = None
-        if (worker_id and analyzer_id):
-            anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
-        elif worker_id:
-            # TODO(Ray): check 'result', error handler
-            result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
-            anal_worker_id = (result[0]).decode()
-            analyzer_id = anal_worker_id.split(':')[1]
-        elif analyzer_id:
-            # TODO(Ray): check 'result', error handler
-            result = await self._mem_db.keys('anal_worker:{}:*'.format(analyzer_id))
-            anal_worker_id = (result[0]).decode()
-            worker_id = anal_worker_id.split(':')[2]
-        else:
-            # TODO(Ray): if both worker_id and analyzer_id are implicit false (like None, empty str, [], {})
-            #           ,need error handler
-            return None
-        worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
-        if worker_obj:
-            worker_obj['analyzer_id'] = analyzer_id
-            worker_obj['worker_id'] = worker_id
-            return worker_obj
+    async def get_info(self, anal_id=None, worker_id=None):
+        # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?
+        if worker_id:
+            pass
+        elif anal_id:
+            # get worker_id by anal_id
+            worker_id = await self._mem_db.get(self._get_anal_key(anal_id))
+            worker_id = worker_id.decode()
+            # TODO(Ray): if worker_id not exist, error handler
+            if not worker_id:
+                return None
         else:
             return None
+        # mget 'status', 'pipelines'
+        mget_cmds = []
+        mget_cmds.append(self._get_worker_key(worker_id, 'status'))
+        mget_cmds.append(self._get_worker_key(worker_id, 'pipelines'))
+        result = await self._mem_db.mget(*mget_cmds)
+        status = result[0].decode()
+        pipelines = jsonify(result[1].decode())
+        return status, pipelines
+
+
+
+    async def get_status(self, anal_id=None, worker_id=None):
+        # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?
+        key = None
+        if worker_id:
+            key = self._get_worker_key(worker_id, 'status')
+        elif anal_id:
+            # get worker_id by anal_id
+            worker_id = await self._mem_db.get(self._get_anal_key(anal_id))
+            worker_id = worker_id.decode()
+            # TODO(Ray): if worker_id not exist, error handler
+            if not worker_id:
+                return None
+            key = self._get_worker_key(worker_id, 'status')
+        else:
+            return None
+        return (await self._mem_db.get(key)).decode()
+
+    async def update_status(self, status, anal_id=None, worker_id=None):
+        # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?
+        key = None
+        if worker_id:
+            key = self._get_worker_key(worker_id, 'status')
+        elif anal_id:
+            # get worker_id by anal_id
+            worker_id = await self._mem_db.get(self._get_anal_key(anal_id))
+            # TODO(Ray): if worker_id not exist, error handler
+            if not worker_id:
+                return None
+            key = self._get_worker_key(worker_id, 'status')
+        else:
+            return None
+        return (await self._mem_db.set(key, status))
+
+    async def update_pipelines(self, pipelines, worker_id):
+        # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?
+        key = None
+        if not worker_id:
+            return
+        key = self._get_worker_key(worker_id, 'pipelines')
+        return (await self._mem_db.set(key, str(pipelines)))
 
     async def get_anal_id(self, worker_id):
         """Get analyzer ID by worker ID.
@@ -98,31 +136,10 @@ class WorkerAgent(object):
         Returns:
             string: analyzer id
         """
-        result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
-        anal_worker_id = (result[0]).decode()
-        # retrieve analyzer_id
-        analyzer_id = anal_worker_id.split(':')[1]
-        return analyzer_id
+        key = self._get_worker_key(worker_id, 'analyzerId')
+        return (await self._mem_db.get(key)).decode()
 
-    async def update_status(self, worker_id, status):
-        """Update status for worker with the worker id.
-
-        Args:
-            worker_id (string): worker id
-            status (string): The new worker status.
-                The status should be 'create', 'initial', 'hshake_1', 'config', 'ready' or 'running'.
-
-        Returns:
-            bool: True for success, False otherwise
-        """
-        result = await self._mem_db.keys('anal_worker:*:{}'.format(worker_id))
-        # TODO(Ray): what if no anal_worker_id
-        anal_worker_id = result[0]
-        worker_obj = jsonify(await self._mem_db.get(anal_worker_id))
-        worker_obj['status'] = status
-        return (await self._mem_db.set(anal_worker_id, str(worker_obj)))
-
-    async def update_last_hbeat(self, worker_id):
+    async def update_hbeat(self, worker_id):
         """Update last heartbeat for the worker with worker id.
 
         Args:
@@ -131,28 +148,51 @@ class WorkerAgent(object):
         Returns:
             bool: True for success, False otherwise
         """
-        # TODO(Ray)
-        pass
+        timestamp = time.time()
+        key = self._get_worker_key(worker_id, 'hbeat')
+        return (await self._mem_db.execute('set', key, timestamp, 'xx'))
 
-    async def update_worker_id(self, analyzer_id, worker_id):
-        """Update the worker id to the worker record
+    async def start_listen_hbeat(self, worker_id):
+        """make brain start to listen heartbeat from worker with worker_id.
 
         Args:
-            analyzer_id (string): analyzer id
             worker_id (string): worker id
 
         Returns:
             bool: True for success, False otherwise
         """
-        # update the anal_worker record:
-        # retrieve the original anal_worker record
-        # TODO(Ray): confirm that the result must have 1 element
-        ori_id = 'anal_worker:{}:placeholder'.format(analyzer_id)
-        worker_obj = jsonify(await self._mem_db.get(ori_id))
-        anal_worker_id = 'anal_worker:{}:{}'.format(analyzer_id, worker_id)
+        timestamp = time.time()
+        key = self._get_worker_key(worker_id, 'hbeat')
+        return (await self._mem_db.set(key, timestamp))
 
-        # append a new anal_worker record with worker_id
-        await self._mem_db.set(anal_worker_id, str(worker_obj))
-        # delete the original record
-        await self._mem_db.delete(ori_id)
 
+    async def examine_all_workers(self, threshold):
+        """Examine if each workers is alive
+
+        """
+        # extract all worker's status
+        status_search_key = self._get_worker_key('*', 'status')
+        status_keys = await self._mem_db.keys(status_search_key)
+        if not status_keys:
+           return
+        status_values = await self._mem_db.execute('mget', *status_keys)
+        qualified_status_keys = []
+        qualified_hbeat_keys = []
+        for status_key, status in zip(status_keys, status_values):
+            status = status.decode()
+            if (status == WorkerStatus.READY.name) or (status == WorkerStatus.RUNNING.name):
+                qualified_status_keys.append(status_key)
+                qualified_hbeat_keys.append(status_key.replace(b'status', b'hbeat'))
+        if not qualified_status_keys:
+            return
+        status_values = await self._mem_db.execute('mget', *qualified_status_keys)
+        hbeat_values = await self._mem_db.execute('mget', *qualified_hbeat_keys)
+        timestamp = time.time()
+
+        for status_key, status, hbeat in zip(qualified_status_keys, status_values, hbeat_values):
+            hbeat = float(hbeat.decode())
+            if (timestamp - hbeat) > float(threshold):
+                logging.debug('worker {} is down'.format(status_key.decode().replace(':status', '')))
+                # change the staus to DOWN
+                #TODO(Ray): error handler
+                await self._mem_db.set(status_key, WorkerStatus.DOWN.name)
