@@ -34,10 +34,10 @@ class WorkerAgent(object):
         Returns:
             string: worker_id, and None for non-exist
         """
-        key = 'anal:{}:workerId'.format(anal_id)
+        key = '{}:anal:{}'.format(self._typename, anal_id)
         result = await self._mem_db.get(key)
         if result:
-            return result
+            return result.decode()
         else:
             return None
 
