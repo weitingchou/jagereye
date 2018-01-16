@@ -196,3 +196,13 @@ class WorkerAgent(object):
                 # change the staus to DOWN
                 #TODO(Ray): error handler
                 await self._mem_db.set(status_key, WorkerStatus.DOWN.name)
+
+    async def del_anal_and_worker(self, anal_id, worker_id):
+        del_keys = []
+        del_keys.append(self._get_anal_key(anal_id))
+        del_keys.append(self._get_worker_key(worker_id, 'status'))
+        del_keys.append(self._get_worker_key(worker_id, 'hbeat'))
+        del_keys.append(self._get_worker_key(worker_id, 'pipelines'))
+        del_keys.append(self._get_worker_key(worker_id, 'analyzerId'))
+
+        return (await self._mem_db.delete(*del_keys))
