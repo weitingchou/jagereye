@@ -103,7 +103,8 @@ class Brain(object):
     async def _restart_process(self):
         # extract all anal_id and worker_id in mem db
         anal_ids, worker_ids = await self._worker_agent.get_all_anal_and_worker_ids()
-
+        if not anal_ids:
+            return
         # reset all worker record like 'status' to WorkerStatus.INITIAL
         await self._worker_agent.mset_worker_status(worker_ids, WorkerStatus.INITIAL.name)
         logging.debug('Reset all workers status to INITIAL')
@@ -382,11 +383,6 @@ class Brain(object):
             logging.error('Error code: "{}" from resource manager'
                           .format(msg['error']['code']))
             return
-        if not 'result' in msg:
-            logging.error('Unexpected message from {}: {}'.format(recv.subject, msg))
-            return
-
-        analyzer_id = msg['analyzerId']
         if msg['command'] == MESSAGES['ch_brain_res']['CREATE_WORKER']:
             # whenver the resource manager create a worker for the brain
             # then inform to brain
