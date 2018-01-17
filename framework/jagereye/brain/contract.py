@@ -84,3 +84,12 @@ class API():
             }
         }
         return obj
+
+    def reply_anal_removed(self, anal_id):
+        obj = {
+            'result': {
+                'code': self._msg_r['ANALYZER_STOPPED'],
+                'id': anal_id
+            }
+        }
+        return obj

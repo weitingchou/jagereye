@@ -320,14 +320,10 @@ class Brain(object):
             context = {'msg': msg, 'reply': reply, 'timestamp': timestamp}
             if await self._ticket_agent.set(analyzer_id, context) == 0:
                 # ticket already exists for analyzer #id, reject the request
-                # because we allow only one ticket for one write operation of the
-                # same analyzer at the same time
                 return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_aval()).encode())
-
             worker_id = await self._worker_agent.get_worker_id(analyzer_id)
             if not worker_id:
                 return await self._nats_cli.publish(reply, jsondumps(self._API.reply_not_found()).encode())
-
             # request resource manager to remove a worker
             req = {
                 'command': MESSAGES['ch_brain_res']['REMOVE_WORKER'],
@@ -371,7 +367,16 @@ class Brain(object):
             await self._worker_agent.create_analyzer(analyzer_id, worker_id)
         elif msg['command'] == MESSAGES['ch_brain_res']['REMOVE_WORKER']:
             # TODO: handle error by chekcing response message if it failed
+            worker_id = msg['params']['workerId']
+            analyzer_id = msg['analyzerId']
+            # get the ticket
+            ticket = await self._ticket_agent.get(analyzer_id)
+            if not ticket:
+                return
+            reply_api_ch = ticket['reply']
+            await self._worker_agent.del_anal_and_worker(analyzer_id, worker_id)
             await self._ticket_agent.delete(analyzer_id)
+            await self._nats_cli.publish(reply_api_ch, jsondumps(self._API.reply_anal_removed(analyzer_id)).encode())
 
     def start(self):
         self._main_loop.run_until_complete(self._setup())
