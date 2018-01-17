@@ -1,6 +1,7 @@
 import aioredis
 import json, os, time
 from jsonschema import Draft4Validator as Validator
+from bson.objectid import ObjectId
 
 from jagereye.util import logging
 from jagereye.util import static_util
@@ -14,9 +15,10 @@ with open(static_util.get_path('worker.json'), 'r') as f:
     validator = Validator(json.loads(f.read()))
 
 class WorkerAgent(object):
-    def __init__(self, typename, mem_db):
+    def __init__(self, typename, mem_db, db):
         self._typename = typename
         self._mem_db = mem_db
+        self._db = db
 
     def _get_anal_key(self, anal_id):
         return '{}:anal:{}'.format(self._typename, anal_id)
@@ -25,13 +27,27 @@ class WorkerAgent(object):
         # TODO(Ray): field only allow 'status', 'pipelines', 'hbeat', 'analyzerId'
         return '{}:worker:{}:{}'.format(self._typename, worker_id, field)
 
-    async def get_all_worker_id(self):
+    async def get_all_anal_and_worker_ids(self):
         search_key = self._get_anal_key('*')
         anal_keys = await self._mem_db.keys(search_key)
+        anal_ids = []
         worker_ids = await self._mem_db.mget(*anal_keys)
-        for idx, val in enumerate(worker_ids):
-            worker_ids[idx] = val.decode()
-        return worker_ids
+        for idx, (anal_key, worker_id) in enumerate(zip(anal_keys, worker_ids)):
+            anal_ids.append(anal_key.decode().replace('{}:anal:'.format(self._typename), ''))
+            worker_ids[idx] = worker_id.decode()
+        return anal_ids, worker_ids
+
+    async def mget_worker_configs(self, anal_ids):
+        object_ids = []
+        configs = []
+        for anal_id in anal_ids:
+            object_ids.append(ObjectId(anal_id))
+        results = self._db.find({'_id': {'$in': object_ids}}, {'pipelines': 1, 'source': 1, 'type': 1})
+        for anal_id, config in zip(anal_ids, results):
+            config['id'] = anal_id
+            del config['_id']
+            configs.append(config)
+        return configs
 
     async def mset_worker_status(self, worker_ids, status):
         mset_cmd = []
