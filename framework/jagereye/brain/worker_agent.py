@@ -33,6 +33,13 @@ class WorkerAgent(object):
             worker_ids[idx] = val.decode()
         return worker_ids
 
+    async def mset_worker_status(self, worker_ids, status):
+        mset_cmd = []
+        for worker_id in worker_ids:
+            mset_cmd.append(self._get_worker_key(worker_id, 'status'))
+            mset_cmd.append(status)
+        await self._mem_db.mset(*mset_cmd)
+
     async def get_worker_id(self, anal_id):
         """ check if the worker for the analyzer is existed
 
@@ -91,8 +98,6 @@ class WorkerAgent(object):
         status = result[0].decode()
         pipelines = jsonify(result[1].decode())
         return status, pipelines
-
-
 
     async def get_status(self, anal_id=None, worker_id=None):
         # TODO(Ray): should prohibit call get_status with both anal_id and worker_id?

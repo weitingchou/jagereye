@@ -105,9 +105,16 @@ class Brain(object):
         worker_ids = await self._worker_agent.get_all_worker_id()
 
         # reset all worker record like 'status' to WorkerStatus.INITIAL
-
+        await self._worker_agent.mset_worker_status(worker_ids, WorkerStatus.INITIAL.name)
+        logging.debug('Reset all workers status to INITIAL')
         # inform to res_mgr with worker_id list
-
+        req = {
+            'command': MESSAGES['ch_brain_res']['RESTART_WORKERS'],
+            'params': {
+                'workerIdList': worker_ids
+            }
+        }
+        await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
         # TODO(Ray): should reset the 'pipelines' for each worker?
         # TODO(Ray): maybe the containers' pipelines is different to the 'pipelines' field in mem db
 
