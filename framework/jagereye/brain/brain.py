@@ -96,7 +96,6 @@ class Brain(object):
 
         logging.debug('Start restarting if there are configuration records of analyzers')
         await self._restart_process()
-        #asyncio.wait(self._restart_process)
         logging.debug('Finish restarting')
         timer.Timer(EXAMINE_INTERVAL, self._worker_agent.examine_all_workers, EXAMINE_THREASHOLD)
 
