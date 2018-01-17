@@ -1,4 +1,5 @@
 const fs = require('fs');
+const map = require('lodash/map');
 const merge = require('lodash/merge');
 const NATS = require('nats');
 const Promise = require('bluebird');
@@ -120,6 +121,17 @@ function createWorker(workerId, workerName) {
     shell.exec(cmd, params);
 }
 
+// Restart an exited worker.
+async function restartWorker(workerId) {
+    // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
+    // Please use normal docker instead of nvidia-docker after the GPU is split
+    // from workers.
+    const cmd = `nvidia-docker start \
+        -a \
+        ${workerId}`;
+    execAsync(cmd, { async: true });
+}
+
 // Remove a worker.
 async function removeWorker(workerId) {
     // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
@@ -220,6 +232,30 @@ async function brainHandler(msg) {
             } catch (e) {
                 // TODO(JiaKuan Su): Error handling.
                 console.error(e);
+            }
+
+            break;
+        }
+
+        case MESSAGING[CH_BRAIN_TO_RES]['RESTART_WORKERS']: {
+            const { workerIds } = request.params;
+
+            try {
+                // TODO(JiaKuan Su): Check these workers exist.
+
+                await Promise.all(map(workerIds, async (workerId) => {
+                    // Restart the worker.
+                    await restartWorker(workerId);
+                    // Update worker status as "RUNNING"
+                    await updateWorkerStatus(workerId, WORKER_STATUS.RUNNING);
+                }));
+
+                // TODO(JiaKuan Su): Send reply to brain.
+
+                console.log(`Workers (IDs = ${workerIds}) has been restarted successfully`);
+            } catch (e) {
+                // TODO: Error handling.
+                console.error(e)
             }
 
             break;
