@@ -94,7 +94,22 @@ class Brain(object):
         await self._nats_cli.subscribe(CH_PUBLIC_BRAIN, cb=self._public_brain_handler)
         await self._nats_cli.subscribe(CH_RES_TO_BRAIN, cb=self._res_handler)
 
+        logging.debug('Start restarting if there are configuration records of analyzers')
+        await self._restart_process()
+        #asyncio.wait(self._restart_process)
+        logging.debug('Finish restarting')
         timer.Timer(EXAMINE_INTERVAL, self._worker_agent.examine_all_workers, EXAMINE_THREASHOLD)
+
+    async def _restart_process(self):
+        # extract all worker_id in mem db
+        worker_ids = await self._worker_agent.get_all_worker_id()
+
+        # reset all worker record like 'status' to WorkerStatus.INITIAL
+
+        # inform to res_mgr with worker_id list
+
+        # TODO(Ray): should reset the 'pipelines' for each worker?
+        # TODO(Ray): maybe the containers' pipelines is different to the 'pipelines' field in mem db
 
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers

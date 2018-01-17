@@ -25,6 +25,14 @@ class WorkerAgent(object):
         # TODO(Ray): field only allow 'status', 'pipelines', 'hbeat', 'analyzerId'
         return '{}:worker:{}:{}'.format(self._typename, worker_id, field)
 
+    async def get_all_worker_id(self):
+        search_key = self._get_anal_key('*')
+        anal_keys = await self._mem_db.keys(search_key)
+        worker_ids = await self._mem_db.mget(*anal_keys)
+        for idx, val in enumerate(worker_ids):
+            worker_ids[idx] = val.decode()
+        return worker_ids
+
     async def get_worker_id(self, anal_id):
         """ check if the worker for the analyzer is existed
 
