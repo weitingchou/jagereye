@@ -30,6 +30,8 @@ class WorkerAgent(object):
     async def get_all_anal_and_worker_ids(self):
         search_key = self._get_anal_key('*')
         anal_keys = await self._mem_db.keys(search_key)
+        if not anal_keys:
+            return None, None
         anal_ids = []
         worker_ids = await self._mem_db.mget(*anal_keys)
         for idx, (anal_key, worker_id) in enumerate(zip(anal_keys, worker_ids)):
