@@ -75,6 +75,7 @@ class Brain(object):
         self._event_db_host = event_db_host
         self._event_db_name = event_db_name
         db_cli = MongoClient(self._event_db_host)
+        self._anal_db = db_cli[self._event_db_name]['analyzers']
         self._event_db = db_cli[self._event_db_name]['events']
         self._app_event_db = db_cli[self._event_db_name]['events_{}'.format(self._typename)]
 
@@ -86,7 +87,7 @@ class Brain(object):
         self._mem_db_cli = await aioredis.create_redis(self._mem_db_host, loop=self._main_loop)
 
         self._event_agent = EventAgent(self._typename, self._mem_db_cli, self._event_db, self._app_event_db)
-        self._worker_agent = WorkerAgent(self._typename, self._mem_db_cli)
+        self._worker_agent = WorkerAgent(self._typename, self._mem_db_cli, self._anal_db)
         self._ticket_agent = ticket.TicketAgent(self._mem_db_cli)
 
         await self._nats_cli.connect(io_loop=self._main_loop, servers=[self._mq_host])
@@ -94,7 +95,36 @@ class Brain(object):
         await self._nats_cli.subscribe(CH_PUBLIC_BRAIN, cb=self._public_brain_handler)
         await self._nats_cli.subscribe(CH_RES_TO_BRAIN, cb=self._res_handler)
 
+        await self._restart_process()
         timer.Timer(EXAMINE_INTERVAL, self._worker_agent.examine_all_workers, EXAMINE_THREASHOLD)
+
+    async def _restart_process(self):
+        # extract all anal_id and worker_id in mem db
+        anal_ids, worker_ids = await self._worker_agent.get_all_anal_and_worker_ids()
+        if not anal_ids:
+            return
+        logging.debug('Start restarting if there are configuration records of analyzers')
+        # reset all worker record like 'status' to WorkerStatus.INITIAL
+        await self._worker_agent.mset_worker_status(worker_ids, WorkerStatus.INITIAL.name)
+        logging.debug('Reset all workers status to INITIAL')
+        # extract configurations(like pipelines, source) for each worker in worker_ids in mongodb
+        configs = await self._worker_agent.mget_worker_configs(anal_ids)
+        # flush tickets of analyzer
+        await self._ticket_agent.delete_many(anal_ids)
+
+        # create tickets for each worker in worker_ids with pipelines_list
+        await self._ticket_agent.set_many(anal_ids, configs, MESSAGES['ch_brain_res']['RESTART_WORKERS'])
+        # inform to res_mgr with worker_id list
+        req = {
+            'command': MESSAGES['ch_brain_res']['RESTART_WORKERS'],
+            'params': {
+                'workerIds': worker_ids
+            }
+        }
+        await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
+        # TODO(Ray): should reset the 'pipelines' for each worker?
+        # TODO(Ray): maybe the containers' pipelines is different to the 'pipelines' field in mem db
+        logging.debug('Finish restarting')
 
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers
@@ -353,9 +383,6 @@ class Brain(object):
             logging.error('Error code: "{}" from resource manager'
                           .format(msg['error']['code']))
             return
-
-        analyzer_id = msg['analyzerId']
-
         if msg['command'] == MESSAGES['ch_brain_res']['CREATE_WORKER']:
             # whenver the resource manager create a worker for the brain
             # then inform to brain
