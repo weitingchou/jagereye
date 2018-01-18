@@ -50,10 +50,10 @@ class TicketAgent():
         key = gen_key(id)
         return await self._mem_db.execute('del', key)
 
-    async def set_many(self, anal_ids, params, command):
+    async def set_many(self, anal_ids, params_list, command):
         mset_cmd = []
         timestamp = time.time()
-        for anal_id, pipelines in zip(anal_ids, params):
+        for anal_id, params in zip(anal_ids, params_list):
             context = {
                 'msg': {
                     'command': command,
