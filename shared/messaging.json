@@ -12,6 +12,7 @@
     },
     "ch_brain_res": {
         "CREATE_WORKER": "create worker",
+        "RESTART_WORKERS": "restart workers",
         "REMOVE_WORKER": "remove worker"
     },
     "ch_res_brain": {

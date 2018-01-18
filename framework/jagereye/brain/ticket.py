@@ -1,4 +1,4 @@
-import aioredis
+import aioredis, time
 from jagereye.brain.utils import jsonify, jsondumps
 
 def gen_key(id):
@@ -49,3 +49,25 @@ class TicketAgent():
         """
         key = gen_key(id)
         return await self._mem_db.execute('del', key)
+
+    async def set_many(self, anal_ids, params, command):
+        mset_cmd = []
+        timestamp = time.time()
+        for anal_id, pipelines in zip(anal_ids, params):
+            context = {
+                'msg': {
+                    'command': command,
+                    'timestamp': timestamp,
+                    'params': params
+                }
+            }
+
+            mset_cmd.append(gen_key(anal_id))
+            mset_cmd.append(jsondumps(context))
+        return await self._mem_db.mset(*mset_cmd)
+
+    async def delete_many(self, anal_ids):
+        del_cmd = []
+        for anal_id in anal_ids:
+            del_cmd.append(gen_key(anal_id))
+        return await self._mem_db.delete(*del_cmd)
