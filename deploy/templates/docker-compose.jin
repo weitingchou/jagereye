@@ -26,6 +26,22 @@ services:
             {%- endif %}
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
+    res_mgr:
+        {%- if build %}
+        build: "{{services.res_mgr.buildpath}}"
+        {%- endif %}
+        image: "jagereye/res_mgr:{{services.res_mgr.version}}"
+        network_mode: "{{services.res_mgr.network_mode}}"
+        volumes:
+            {%- for _, volume in services.res_mgr.volumes.items() %}
+            - "{{volume}}"
+            {%- endfor %}
+        depends_on:
+            - messaging
+            - mem_db
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
+            - SHARED_ROOT={{environ.SHARED_ROOT}}
     database:
         {%- if build %}
         build: "{{services.database.buildpath}}"
@@ -70,6 +86,7 @@ services:
         network_mode: "{{content.network_mode}}"
         {%- if services %}
         depends_on:
+            - res_mgr
             - database
             - messaging
             - mem_db
