@@ -24,6 +24,9 @@ services:
             client: "6379"
     res_mgr:
         version: "0.0.1"
+        network_mode: host
+        volumes:
+            docker_sock: /var/run/docker.sock:/var/run/docker.sock
         worker:
             network_mode: host
 apps:
