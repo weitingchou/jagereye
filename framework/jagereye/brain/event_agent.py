@@ -60,9 +60,17 @@ class EventAgent(object):
             else:
                 base_event['date'] = datetime.datetime.fromtimestamp(base_event['timestamp'])
                 valid_events.append(base_event)
+        events_for_notify = []
         if valid_events:
             # TODO(Ray): error handler and logging if insert failed
             result  = self._event_db.insert_many(valid_events)
+            for inserted_event, inserted_content in zip(valid_events, contents):
+                del inserted_content['_id']
+                inserted_event['_id'] = str(inserted_event['_id'])
+                inserted_event['date'] = inserted_event['date'].strftime("%Y-%m-%d %H:%M:%S")
+                inserted_event['content'] = inserted_content
+                events_for_notify.append(inserted_event)
+        return events_for_notify
 
     async def consume_from_worker(self, worker_id):
         """Get event array by worker ID.
