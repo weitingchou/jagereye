@@ -53,7 +53,7 @@ function searchEvents(req, res, next) {
     if (!body['timestamp']['start'] || !body['timestamp']['end']) {
         return next(createError(400, null));
     }
-    if ((typeof body['timestamp']['start'] != 'number') || (typeof body['timestamp']['end'] != 'number')) {
+    if ((typeof body['timestamp']['start'] !== 'number') || (typeof body['timestamp']['end'] !== 'number')) {
         return next(createError(400, null));
     }
     query['timestamp'] = {$gte: body['timestamp']['start'], $lt: body['timestamp']['end']};
