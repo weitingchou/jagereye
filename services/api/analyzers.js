@@ -200,7 +200,7 @@ function deleteAnalyzer(req, res, next) {
                 if (err) {
                     return next(createError(500, null, err))
                 }
-                res.status(204).send()
+                res.status(200).send({ result: { id } })
             })
         }
         else if (reply['code']) {
@@ -355,7 +355,7 @@ function deleteAnalyzerRuntime(req, res, next) {
         }
         if (reply['result']) {
             closeResponse()
-            return res.status(204).send()
+            return res.status(200).send({ result: { id } })
         }
         if (reply['code']) {
             if (reply['code'] === NATS.REQ_TIMEOUT) {
