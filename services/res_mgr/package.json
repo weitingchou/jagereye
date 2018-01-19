@@ -4,11 +4,14 @@
   "version": "0.0.1",
   "description": "Resource Manager of JagerEye",
   "main": "server.js",
-  "scripts": {},
+  "scripts": {
+    "start": "SHARED_ROOT=${SHARED_ROOT} node server.js"
+  },
   "author": "JiaKuan Su",
   "license": "MIT",
   "dependencies": {
     "bluebird": "^3.5.1",
+    "dockerode": "^2.5.3",
     "lodash": "^4.17.4",
     "nats": "^0.7.24",
     "redis": "^2.8.0",

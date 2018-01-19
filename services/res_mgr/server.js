@@ -1,3 +1,4 @@
+const Docker = require('dockerode');
 const fs = require('fs');
 const map = require('lodash/map');
 const merge = require('lodash/merge');
@@ -15,7 +16,11 @@ const CH_BRAIN_TO_RES = 'ch_brain_res';
 const CH_RES_TO_BRAIN = 'ch_res_brain';
 
 // The shared directory between host and containers.
-const HOST_SHARED_DIR = '~/jagereye_shared';
+const SHARED_ROOT =
+    process.env.SHARED_ROOT ?
+    process.env.SHARED_ROOT :
+    process.env.HOME;
+const HOST_SHARED_DIR = `${SHARED_ROOT}/jagereye_shared`;
 const CONTAINER_SHARED_DIR = '/root/jagereye_shared';
 
 // The possible worker status.
@@ -27,6 +32,11 @@ const WORKER_STATUS = {
 
 // The Messaging format.
 const MESSAGING = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'));
+
+// Initialize Docker.
+const docker = new Docker({
+    Promise,
+});
 
 // Initialize NATS.
 const nats = NATS.connect({
@@ -76,14 +86,6 @@ mem_db_cli.on('warning', () => {
     console.log('Memory database warning.');
 });
 
-function _exec(cmd, options, callback) {
-    shell.exec(cmd, options, (code, stdout, stderr) => {
-        if (code !== 0) { return callback(stderr); }
-        callback(null, stdout);
-    });
-}
-const execAsync = Promise.promisify(_exec)
-
 // Generate a unique worker ID.
 function genWorkerId() {
     return `worker_${uuidv4()}`;
@@ -105,42 +107,43 @@ function hasEnoughResource() {
 }
 
 // Create a worker.
-function createWorker(workerId, workerName) {
-    // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
-    // Please use normal docker instead of nvidia-docker after the GPU is split
-    // from workers.
+async function createWorker(workerId, workerName) {
     // TODO: Read the network mode configuration from 'shared/config.*.yml' instead
     //       of hardcoded '--network="host"'.
-    const cmd = `nvidia-docker run \
-        --name=${workerId} \
-        --network="host" \
-        -v ${HOST_SHARED_DIR}:${CONTAINER_SHARED_DIR} \
-        -e worker_id=${workerId} \
-        ${workerName}`;
-    const params = { async: true };
-    shell.exec(cmd, params);
+    const params = {
+        Image: workerName,
+        Runtime: 'nvidia',
+        NetworkMode: 'host',
+        name: workerId,
+        Env: [`worker_id=${workerId}`],
+        Binds: [`${HOST_SHARED_DIR}:${CONTAINER_SHARED_DIR}`],
+    };
+
+    return docker.createContainer(params).then((container) => {
+        return container.start();
+    });
 }
 
 // Restart an exited worker.
 async function restartWorker(workerId) {
-    // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
-    // Please use normal docker instead of nvidia-docker after the GPU is split
-    // from workers.
-    const cmd = `nvidia-docker start \
-        -a \
-        ${workerId}`;
-    execAsync(cmd, { async: true });
+    const container = docker.getContainer(workerId);
+
+    const stats = await container.inspect();
+
+    if (stats.State.Running) {
+        return container.stop().then(() => container.start());
+    } else {
+        return container.start();
+    }
 }
 
 // Remove a worker.
 async function removeWorker(workerId) {
-    // TODO(JiaKuan Su): Currently we must use nvidia-docker to create workers,
-    // Please use normal docker instead of nvidia-docker after the GPU is split
-    // from workers.
-    const cmd = `docker rm \
-        --force \
-        ${workerId}`;
-    await execAsync(cmd, {silent: true});
+    const container = docker.getContainer(workerId);
+
+    return container.remove({
+        force: true,
+    });
 }
 
 // Get the key of a worker to access the memory database.
@@ -224,7 +227,7 @@ async function brainHandler(msg) {
                 // Update worker status as "CREATING"
                 await updateWorkerStatus(workerId, WORKER_STATUS.CREATING);
                 // Create a worker.
-                createWorker(workerId, workerName);
+                await createWorker(workerId, workerName);
                 // Update worker status as "RUNNING"
                 await updateWorkerStatus(workerId, WORKER_STATUS.RUNNING);
 
