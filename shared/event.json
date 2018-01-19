@@ -14,10 +14,10 @@
     "type": {
       "type": "string"
     },
-    "contentId": {
+    "content": {
       "type": "string"
     }
   },
   "additionalProperties": false,
-  "required":["analyzerId", "timestamp", "appName", "contentId", "type"]
+  "required":["analyzerId", "timestamp", "appName", "content", "type"]
 }

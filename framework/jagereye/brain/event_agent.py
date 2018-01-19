@@ -53,7 +53,7 @@ class EventAgent(object):
                     'timestamp': event['timestamp'],
                     'type': event['type'],
                     'appName': event['app_name'],
-                    'contentId': content_id
+                    'content': content_id
             }
             if not validator.is_valid(base_event):
                 logging.error('Fail validation for event {}'.format(base_event))
