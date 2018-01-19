@@ -86,7 +86,9 @@ class Generator(object):
         return context
 
     def generate(self, target, is_build=False):
-        context = {"environ": os.environ}
+        environ = os.environ
+        environ['SHARED_ROOT'] = os.path.expanduser('~')
+        context = { "environ": environ }
 
         if target == 'services' or target == 'all':
             context['services'] = self._get_service_context(is_build)
