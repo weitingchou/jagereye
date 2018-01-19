@@ -214,11 +214,9 @@ class Brain(object):
                     return
 
                 logging.info('Received events: {}'.format(events))
-                self._event_agent.save_in_db(events, analyzer_id)
-                await self._nats_cli.publish(CH_NOTIFICATION, str(events).encode())
-
-                logging.debug('Events: "{}" from worker "{}"'.format(events, worker_id))
-
+                events_for_notify = self._event_agent.save_in_db(events, analyzer_id)
+                logging.debug('Push events to notification: "{}"'.format(events_for_notify, worker_id))
+                await self._nats_cli.publish(CH_NOTIFICATION, str(events_for_notify).encode())
                 # TODO: Send events back to notification service.
             elif verb == 'hbeat':
                 worker_id = context['workerID']
