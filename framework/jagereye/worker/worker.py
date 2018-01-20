@@ -32,8 +32,13 @@ class Worker(object):
         self._mem_db_cli = None
         self._name = name
         self._worker_id = worker_id
-        files_dir = os.path.join(shared_dir, name, worker_id)
-        self._files_dir = os.path.expanduser(files_dir)
+        relative_files_dir = os.path.join(name, worker_id)
+        abs_files_dir = os.path.join(shared_dir, relative_files_dir)
+        abs_files_dir = os.path.expanduser(abs_files_dir)
+        self._files_dir = {
+            'abs': abs_files_dir,
+            'relative': relative_files_dir
+        }
         self._ch_worker_to_brain = self._gen_ch_WtoB() 
         self._ch_brain_to_worker = self._gen_ch_BtoW()
         self._event_queue_key = 'event:brain:{}'.format(worker_id)

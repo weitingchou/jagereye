@@ -116,8 +116,13 @@ def main(worker_id, standalone = False, params=None):
         worker.register_pipeline(worker_fn)
         worker.start()
     else:
-        files_dir = os.path.join('~/jagereye_shared', WORKER_NAME, worker_id)
-        files_dir = os.path.expanduser(files_dir)
+        relative_files_dir = os.path.join(WORKER_NAME, worker_id)
+        abs_files_dir = os.path.join('~/jagereye_shared', relative_files_dir)
+        abs_files_dir = os.path.expanduser(abs_files_dir)
+        files_dir = {
+            'abs': abs_files_dir,
+            'relative': relative_files_dir
+        }
         worker_fn(params, files_dir, _send_event)
 
 
