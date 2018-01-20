@@ -423,7 +423,6 @@ class VideoRecordModule(IModule):
     def _abs_file_name(self, file_name):
         """Get absolute file name for a given file name.
         """
-        print(self._files_dir)
         return os.path.join(self._files_dir['abs'], file_name)
 
     def _relative_file_name(self, file_name):
