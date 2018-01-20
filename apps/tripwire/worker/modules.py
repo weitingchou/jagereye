@@ -399,7 +399,9 @@ class VideoRecordModule(IModule):
         """Create a new `VideoRecordModule`.
 
         Args:
-          files_dir (string): The directory to store the output video.
+          files_dir (dict): The directory to store the output video. It has two
+            items: "abs" for absolute path, "relative" for realtive path to the
+            shared root directory.
           reserved_count (int): The number of reseved images before alert mode.
           fps (int): The FPS of recorded video.
           video_format (string): The format of video. Defaults to "mp4".
@@ -417,6 +419,16 @@ class VideoRecordModule(IModule):
         self._reserved_images = []
         self._video_recorder = None
         self._queue = None
+
+    def _abs_file_name(self, file_name):
+        """Get absolute file name for a given file name.
+        """
+        return os.path.join(self._files_dir['abs'], file_name)
+
+    def _relative_file_name(self, file_name):
+        """Get relative file name for a given file name.
+        """
+        return os.path.join(self._files_dir['relative'], file_name)
 
     def prepare(self):
         """The routine of module preparation."""
@@ -440,16 +452,19 @@ class VideoRecordModule(IModule):
 
         # Handle alert mode.
         if mode == _MODE.ALERT_START:
-            if not os.path.exists(self._files_dir):
-                os.makedirs(self._files_dir)
-            video_name = '{}.{}'.format(timestamp, self._video_format)
-            video_name = os.path.join(self._files_dir, video_name)
-            thumbnail_name = '{}.{}'.format(timestamp, self._thumbnail_format)
-            thumbnail_name = os.path.join(self._files_dir, thumbnail_name)
+            if not os.path.exists(self._files_dir['abs']):
+                os.makedirs(self._files_dir['abs'])
+
+            video_file = '{}.{}'.format(timestamp, self._video_format)
+            abs_video_name = self._abs_file_name(video_file)
+            relative_video_name = self._relative_file_name(video_file)
+            thumbnail_file = '{}.{}'.format(timestamp, self._thumbnail_format)
+            abs_thumbnail_name = self._abs_file_name(thumbnail_file)
+            relative_thumbnail_name = self._relative_file_name(thumbnail_file)
             video_size = (im_width, im_height)
             self._queue = Queue()
-            args = (video_name,
-                    thumbnail_name,
+            args = (abs_video_name,
+                    abs_thumbnail_name,
                     self._fps,
                     video_size,
                     self._queue,)
@@ -468,8 +483,8 @@ class VideoRecordModule(IModule):
                 'image': image,
                 'thumbnail': True
             })
-            blob.feed('video_name', np.array(video_name))
-            blob.feed('thumbnail_name', np.array(thumbnail_name))
+            blob.feed('video_name', np.array(relative_video_name))
+            blob.feed('thumbnail_name', np.array(relative_thumbnail_name))
         elif mode == _MODE.ALERTING:
             self._queue.put({
                 'command': 'RECORD',
