@@ -5,12 +5,16 @@ from __future__ import division
 from __future__ import print_function
 
 import time
+from urllib.parse import urlparse
 
 import cv2
 import numpy as np
 
+from jagereye.streaming.exceptions import EndOfVideoError
+from jagereye.streaming.exceptions import RetryError
 from jagereye.streaming.blob import Blob
 from jagereye.streaming.capturers.base import ICapturer
+from jagereye.util import logging
 from jagereye.util.generic import now
 
 
@@ -41,6 +45,7 @@ class VideoStreamCapturer(ICapturer):
         """
         self._src = src
         self._cap = None
+        self._retry = False
 
     @property
     def src(self):
@@ -66,18 +71,39 @@ class VideoStreamCapturer(ICapturer):
           `Blob`: The blob which contains "image" and "timestamp" tensor.
 
         Raises:
-          EOFError: If the stream ends.
+          RetryError: If the stream is live and disconnected temporarily.
+          EndOfVideoError: If the stream ends.
         """
+        if self._retry:
+            self._cap.release()
+            self._cap = cv2.VideoCapture(self._src)
+            self._retry = False
+
         success, image = self._cap.read()
         timestamp = np.array(now())
+
         if not success:
-            raise EOFError()
+            if self._is_live_stream():
+                self._retry = True
+                raise RetryError('Try to reconnect to {}'.format(self._src))
+            else:
+                raise EndOfVideoError('Video {} ends'.format(self._src))
 
         blob = Blob()
         blob.feed('image', image)
         blob.feed('timestamp', timestamp)
 
         return blob
+
+    def _is_live_stream(self):
+        """Check whether the source is live stream or not.
+
+        Returns:
+          bool: True if the source is stream, False otherwise.
+        """
+        # TODO(JiaKuan Su): Also need check the URL file format, such as
+        # "http://url.to/vdieo.mp4"
+        return urlparse(self._src).scheme != ''
 
     def destroy(self):
         """The routine of video stream capturer destruction."""
