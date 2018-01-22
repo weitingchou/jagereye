@@ -8,22 +8,36 @@ import threading
 from queue import Queue
 import time
 
+from jagereye.streaming.exceptions import EndOfVideoError
+from jagereye.streaming.exceptions import RetryError
 from jagereye.streaming.capturers.base import ICapturer
 from jagereye.streaming.modules.base import IModule
+from jagereye.util import logging
 
 
-def _receive(capturer, cap_interval, queue, stop_event):
+def _receive(capturer, cap_interval, queue, retry_interval, stop_event):
     """Worker function to receive blobs from a capturer."""
     cap_interval_sec = cap_interval / 1000.0
+    retry_interval_sec = retry_interval / 1000.0
     while not stop_event.is_set():
+        sleep_interval = cap_interval_sec
+
         try:
             blob = capturer.capture()
             if not blob is None:
                 queue.put(blob)
-        except Exception: # pylint: disable=broad-except
-            # TODO(JiaKuan Su): Handle more exception cases.
+        except RetryError as e:
+            logging.warn('Retry request from capturer: {}'.format(e))
+            sleep_interval = retry_interval_sec
+        except EndOfVideoError as e:
+            logging.info('End of file from capturer: {}'.format(e))
             stop_event.set()
-        time.sleep(cap_interval_sec)
+        except Exception as e: # pylint: disable=broad-except
+            # TODO(JiaKuan Su): Handle more exception cases.
+            logging.error('Exception from capturer: {}'.format(e))
+            stop_event.set()
+
+        time.sleep(sleep_interval)
 
 
 def _operate(modules, batch_size, wait_interval, queue, stop_event):
@@ -35,8 +49,9 @@ def _operate(modules, batch_size, wait_interval, queue, stop_event):
                 blobs = [queue.get() for i in range(batch_size)] # pylint: disable=unused-variable
                 for module in modules:
                     blobs = module.execute(blobs)
-            except Exception: # pylint: disable=broad-except
+            except Exception as e: # pylint: disable=broad-except
                 # TODO(JiaKuan Su): Handle more exception cases.
+                logging.error('Exception from modules: {}'.format(e))
                 stop_event.set()
         else:
             # Sleep only when queue size is not enough.
@@ -56,16 +71,19 @@ class Pipeline(object):
     STATE_ACTIVE = 1
     STATE_STOPPED = 2
 
-    def __init__(self, cap_interval=50, batch_size=1):
+    def __init__(self, cap_interval=50, batch_size=1, retry_interval=3000):
         """Create a new `Pipeline`.
 
         Args:
           cap_interval (int): The interval (in milliseconds) to capture a new
             blob. Defaults to 0.
           batch_size (int): The size of batch. Defaults to 1.
+          retry_interval (int): The intreval (in milliseconds) to retry when
+            the capturer requests a retry.
         """
         self._cap_interval = cap_interval
         self._batch_size = batch_size
+        self._retry_interval = retry_interval
         self._capturer = None
         self._modules = []
         self._state = self.STATE_INITIALIZED
@@ -199,7 +217,7 @@ class Pipeline(object):
         queue = Queue()
         self._stop_event = threading.Event()
         rec_args = (self._capturer, self._cap_interval, queue,
-                    self._stop_event,)
+                    self._retry_interval, self._stop_event,)
         op_args = (self._modules, self._batch_size, self._cap_interval,
                    queue, self._stop_event,)
         self._threads.append(threading.Thread(target=_receive, args=rec_args))
