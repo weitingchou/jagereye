@@ -1,5 +1,6 @@
 """The modules used by tripwire worker."""
 
+import json
 import threading
 import os
 from queue import Queue
@@ -223,13 +224,17 @@ class InRegionDetectionModule(IModule):
             scores = np.squeeze(blob.fetch('detection_scores'))
             classes = np.squeeze(blob.fetch('detection_classes'))
             num = int(blob.fetch('num_detections')[0])
-            in_region_labels = self._detect_in_region_objects(boxes,
-                                                              scores,
-                                                              classes,
-                                                              num,
-                                                              im_width,
-                                                              im_height)
-            blob.feed('in_region_labels', in_region_labels)
+            result = self._detect_in_region_objects(boxes,
+                                                    scores,
+                                                    classes,
+                                                    num,
+                                                    im_width,
+                                                    im_height)
+
+            blob.feed('region', np.array(self._region))
+            blob.feed('labels', result[0])
+            blob.feed('boxes', result[1])
+            blob.feed('scores', result[2])
 
         return blobs
 
@@ -275,9 +280,17 @@ class InRegionDetectionModule(IModule):
           im_height (int): The image height.
 
         Returns:
-          numpy `ndarray`: The labels of objects that are in the region.
+          tuple: The detection result. The tuple contains:
+            in_region_labels (numpy `ndarray`): The labels of objects that are
+              in the region.
+            in_region_boxes (numpy `ndarray`): The bounding boxes of objects
+              that are in the region.
+            in_region_scores (numpy `ndarray`): The scores of objects that are
+              in the region.
         """
         in_region_labels = []
+        in_region_boxes = []
+        in_region_scores = []
 
         for i in range(num):
             # Check its label is interested or not.
@@ -300,8 +313,16 @@ class InRegionDetectionModule(IModule):
                 continue
             # Put the results.
             in_region_labels.append(label)
+            in_region_boxes.append(box)
+            in_region_scores.append(score)
 
-        return np.array(in_region_labels)
+        result = (
+            np.array(in_region_labels),
+            np.array(in_region_boxes),
+            np.array(in_region_scores)
+        )
+
+        return result
 
 
 class TripwireModeModule(IModule):
@@ -320,7 +341,7 @@ class TripwireModeModule(IModule):
         # TODO(JiaKuan Su): Currently, I only handle the case for batch_size=1,
         # please help complete the case for batch_size>1.
         blob = blobs[0]
-        in_region_labels = blob.fetch('in_region_labels')
+        in_region_labels = blob.fetch('labels')
 
         # Mode switch.
         if self._mode == _MODE.NORMAL:
@@ -351,6 +372,10 @@ def _record_video(video_name,
                   thumbnail_name,
                   fps,
                   video_size,
+                  save_metadata,
+                  metadata_name,
+                  metadata_frame_names,
+                  metadata_custom_obj,
                   queue):
     """Threading function to record a video.
 
@@ -361,6 +386,13 @@ def _record_video(video_name,
       video_size (tuple): The size of recorded video. The tuple contains:
         width (int): The video width.
         height (int): The video height.
+      save_metadata (bool): To store the metadata of the video clip or not.
+      metadata_name (string): The name of metadata file, the argument only used
+        when save_metadata is True.
+      metadata_frame_names (list of string): The names of tensors to store in
+        metadata, the argument only used when save_metadata is True.
+      metadata_custom_obj (dict): The names and values to store in custom field
+        of metadata, the argument only used when save metadata is True.
       queue (`queue.Queue`): The task queue.
     """
     logging.info('Start recording {}'.format(video_name))
@@ -369,16 +401,44 @@ def _record_video(video_name,
                     ' filesink location={}'.format(video_name))
     video_writer = cv2.VideoWriter(gst_pipeline, 0, fps, video_size)
 
+    if save_metadata:
+        metadata = {
+            'fps': fps,
+            'custom': metadata_custom_obj,
+            'frames': []
+        }
+
     while True:
         task = queue.get(block=True)
         command = task['command']
         if command == 'RECORD':
-            image = task['image']
+            blob = task['blob']
+            image = blob.fetch('image')
             video_writer.write(image)
             if task['thumbnail']:
                 cv2.imwrite(thumbnail_name, image)
                 logging.info('Save thumbnail {}'.format(thumbnail_name))
+
+            # Update metadata if necessary.
+            if save_metadata:
+                # Get timestamp
+                timestamp = float(blob.fetch('timestamp'))
+                # Get per-frame information.
+                frame = dict()
+                for name in metadata_frame_names:
+                    frame[name] = blob.fetch(name).tolist()
+
+                # Update metadata.
+                if not 'start' in metadata:
+                    metadata['start'] = timestamp
+                metadata['end'] = timestamp
+                metadata['frames'].append(frame)
         elif command == 'END':
+            if save_metadata:
+                with open(metadata_name, 'w') as outfile:
+                    json.dump(metadata, outfile)
+                    logging.info('Save metadata {}'.format(metadata_name))
+
             break
 
     video_writer.release()
@@ -393,9 +453,12 @@ class VideoRecordModule(IModule):
                  files_dir,
                  reserved_count,
                  fps,
-                 video_format = 'mp4',
-                 thumbnail_format = 'jpg',
-                 image_name='image'):
+                 image_name='image',
+                 video_format='mp4',
+                 thumbnail_format='jpg',
+                 save_metadata=True,
+                 metadata_frame_names=[],
+                 metadata_custom_names=[]):
         """Create a new `VideoRecordModule`.
 
         Args:
@@ -404,11 +467,19 @@ class VideoRecordModule(IModule):
             shared root directory.
           reserved_count (int): The number of reseved images before alert mode.
           fps (int): The FPS of recorded video.
+          image_name (string): The name of input tensor to read. Defaults to
+            "image".
           video_format (string): The format of video. Defaults to "mp4".
           thumbnail_format (string): The format of thumbnail image. Defaults to
             "mp4".
-          image_name (string): The name of input tensor to read. Defaults to
-            "image".
+          save_metadata (bool): To store the metadata of the video clip or not.
+            Defaults to True.
+          metadata_frame_names (list of string): The names of tensors to store
+            in per-frame field of metadata, the argument only used when save
+            metadata is True. Defaults to [].
+          metadata_custom_names (list of string): The names of tensors to store
+            in custom field of metadata, the argument only used when save
+            metadata is True. Defaults to [].
         """
         self._files_dir = files_dir
         self._reserved_count = reserved_count
@@ -416,7 +487,11 @@ class VideoRecordModule(IModule):
         self._thumbnail_format = thumbnail_format
         self._fps = fps
         self._image_name = image_name
-        self._reserved_images = []
+        self._save_metadata = save_metadata
+        self._metadata_frame_names = metadata_frame_names
+        self._metadata_custom_names = metadata_custom_names
+        self._metadata = None
+        self._reserved_blobs = []
         self._video_recorder = None
         self._queue = None
 
@@ -455,6 +530,18 @@ class VideoRecordModule(IModule):
             if not os.path.exists(self._files_dir['abs']):
                 os.makedirs(self._files_dir['abs'])
 
+            if self._save_metadata:
+                # Construct the metadata file name.
+                metadata_file = '{}.json'.format(timestamp)
+                abs_metadata_name = self._abs_file_name(metadata_file)
+                relative_metadata_name = self._relative_file_name(metadata_file)
+                # Feed the metadata file name to blob.
+                blob.feed('metadata_name', np.array(relative_metadata_name))
+                # Construct the customized names and values to store in metadata.
+                metadata_custom_obj = dict()
+                for name in self._metadata_custom_names:
+                    metadata_custom_obj[name] = blob.fetch(name).tolist()
+
             video_file = '{}.{}'.format(timestamp, self._video_format)
             abs_video_name = self._abs_file_name(video_file)
             relative_video_name = self._relative_file_name(video_file)
@@ -467,28 +554,36 @@ class VideoRecordModule(IModule):
                     abs_thumbnail_name,
                     self._fps,
                     video_size,
+                    self._save_metadata,
+                    abs_metadata_name if self._save_metadata else None,
+                    self._metadata_frame_names,
+                    metadata_custom_obj if self._save_metadata else None,
                     self._queue,)
             self._video_recorder = threading.Thread(target=_record_video,
                                                     args=args)
             self._video_recorder.setDaemon(True)
             self._video_recorder.start()
-            for reserved_image in self._reserved_images:
+
+            # Record reserved images.
+            for reserved_blob in self._reserved_blobs:
                 self._queue.put({
                     'command': 'RECORD',
-                    'image': reserved_image,
+                    'blob': reserved_blob,
                     'thumbnail': False
                 })
+            # Record current image.
             self._queue.put({
                 'command': 'RECORD',
-                'image': image,
+                'blob': blob,
                 'thumbnail': True
             })
+
             blob.feed('video_name', np.array(relative_video_name))
             blob.feed('thumbnail_name', np.array(relative_thumbnail_name))
         elif mode == _MODE.ALERTING:
             self._queue.put({
                 'command': 'RECORD',
-                'image': image,
+                'blob': blob,
                 'thumbnail': False
             })
         elif mode == _MODE.ALERT_END:
@@ -498,11 +593,11 @@ class VideoRecordModule(IModule):
             self._video_recorder = None
             self._queue = None
 
-        # Insert the newest image to reserved buffer.
-        self._reserved_images.append(image)
-        # Remove the oldest image from the reserved buffer if necessary.
-        if len(self._reserved_images) > self._reserved_count:
-            self._reserved_images.pop(0)
+        # Insert the newest blob to reserved buffer.
+        self._reserved_blobs.append(blob)
+        # Remove the oldest blob from the reserved buffer if necessary.
+        if len(self._reserved_blobs) > self._reserved_count:
+            self._reserved_blobs.pop(0)
 
         return blobs
 
@@ -542,14 +637,18 @@ class OutputModule(IModule):
             if mode == _MODE.ALERT_START:
                 video_name = str(blob.fetch('video_name'))
                 thumbnail_name = str(blob.fetch('thumbnail_name'))
-                triggered = blob.fetch('in_region_labels').tolist()
+                triggered = blob.fetch('labels').tolist()
                 event_type = 'tripwire_alert'
                 content = {
                     'triggered': triggered,
                     'video_name': video_name,
                     'thumbnail_name': thumbnail_name
                 }
+                if blob.has('metadata_name'):
+                    content['metadata_name'] = str(blob.fetch('metadata_name'))
+
                 self._send_event(event_type, timestamp, content)
+
                 logging.info('Sent event type: "{}", timestamp: "{}", content:'
                              ' "{}"'.format(event_type, timestamp, content))
 

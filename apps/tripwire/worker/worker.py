@@ -74,6 +74,8 @@ def worker_fn(params, files_dir, send_event):
         region[1]['y']
     )
     triggers = config['triggers']
+    metadata_frame_names = ['mode', 'labels', 'boxes', 'scores']
+    metadata_custom_names = ['region']
 
     pipeline = Pipeline(cap_interval=cap_interval)
 
@@ -84,15 +86,17 @@ def worker_fn(params, files_dir, send_event):
                                           region_tuple,
                                           triggers)) \
             .pipe(TripwireModeModule(reserved_count=reserved_count)) \
-            .pipe(DrawTripwireModule(region_tuple, normal_color, alert_color)) \
             .pipe(VideoRecordModule(files_dir,
                                     reserved_count,
                                     FPS,
-                                    image_name='drawn_image')) \
+                                    save_metadata=True,
+                                    metadata_frame_names=metadata_frame_names,
+                                    metadata_custom_names=metadata_custom_names)) \
             .pipe(OutputModule(send_event))
 
     if VISUALIZE:
-        pipeline.pipe(DisplayModule(image_name='drawn_image'))
+        pipeline.pipe(DrawTripwireModule(region_tuple, normal_color, alert_color)) \
+                .pipe(DisplayModule(image_name='drawn_image'))
 
     pipeline.start()
     pipeline.await_termination()
