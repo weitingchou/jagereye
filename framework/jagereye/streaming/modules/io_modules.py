@@ -42,14 +42,23 @@ def _relative_file_name(files_dir, file_name):
 class ImageSaveModule(IModule):
     """The module for saving images."""
 
-    def __init__(self, files_dir, image_format='jpg', image_name='image'):
+    def __init__(self,
+                 files_dir,
+                 image_format='jpg',
+                 max_width=0,
+                 image_name='image'):
         """Create a new `ImageSaveModule`.
 
         Args:
-          files_dir (dict): The directory to store the output video. It has two
+          files_dir (dict): The directory to store the output image. It has two
             items: "abs" for absolute path, "relative" for realtive path to the
             shared root directory.
           image_format (string): The format of image to save. Defaults to "jpg".
+          max_width (int): The maximum width of output image. If the given
+            image width is larger than max_width, the width of output image
+            file will be equal to max_width, and the height will be shrunk
+            proportionally. When max_width <= 0, the maximum width of output
+            image is unlimited. Defaults to 0.
           image_name (string): The name of input tensor to read. Defaults to
             "image".
 
@@ -58,6 +67,7 @@ class ImageSaveModule(IModule):
         """
         self._files_dir = files_dir
         self._image_format = image_format
+        self._max_width = max_width
         self._image_name = image_name
 
     def prepare(self):
@@ -77,6 +87,11 @@ class ImageSaveModule(IModule):
             if image.ndim != 2 and image.ndim != 3:
                 raise RuntimeError('The input "image" tensor is not '
                                    '3-dimensional.')
+
+            origianl_width = image.shape[1]
+            if self._max_width > 0 and origianl_width > self._max_width:
+                ratio = self._max_width / origianl_width
+                image = cv2.resize(image, (0, 0), fx=ratio, fy=ratio)
 
             # Construct the image file name.
             image_file = '{}.{}'.format(timestamp, self._image_format)

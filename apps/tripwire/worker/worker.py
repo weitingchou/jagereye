@@ -91,7 +91,9 @@ def worker_fn(params, files_dir, send_event):
                                      normal_color,
                                      alert_color,
                                      always_draw=VISUALIZE)) \
-            .pipe(ImageSaveModule(files_dir, image_name='drawn_image')) \
+            .pipe(ImageSaveModule(files_dir,
+                                  max_width=300,
+                                  image_name='drawn_image')) \
             .pipe(VideoRecordModule(files_dir,
                                     reserved_count,
                                     FPS,
