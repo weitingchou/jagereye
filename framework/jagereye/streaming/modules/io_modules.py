@@ -40,7 +40,30 @@ def _relative_file_name(files_dir, file_name):
 
 
 class ImageSaveModule(IModule):
-    """The module for saving images."""
+    """The module for saving images.
+
+    The module is to save an image for each blob. The module only saves an image
+    when the input blob contains boolean tensor "to_save" and its value is True.
+    When saving an image, the input blob must contains a tensor whose default
+    name is "image" and "timestamp", and the output blob will be fed
+    a "abs_image_name" tensor and a "relative_image_name" tensor to store the
+    absolute and relative file name separately. Users can also specify the name
+    of input tensor such as "gray_image" instead of the default name.
+
+    The dimension of input "to_save" tensor should be 0 and its type is bool.
+
+    The dimension of input "image" tensor must be a 2 (grayscale) or 3 (BGR) and
+    its type is unit8. The shape format is:
+    1. Image height.
+    2. Image width.
+    3. (Only for 3-dimensional tensor) Number of channels, which is usually 3.
+
+    The dimension of input "timestamp" tensor should be 0 and its type is
+    float64.
+
+    The output "abs_image_name" and "relative_image_name" tensor are both
+    0-dimensional numpy `ndarray`.
+    """
 
     def __init__(self,
                  files_dir,
@@ -61,9 +84,6 @@ class ImageSaveModule(IModule):
             image is unlimited. Defaults to 0.
           image_name (string): The name of input tensor to read. Defaults to
             "image".
-
-        Raises:
-            RuntimeError: If the input tensor is not 2 or 3-dimensional.
         """
         self._files_dir = files_dir
         self._image_format = image_format
@@ -75,7 +95,22 @@ class ImageSaveModule(IModule):
         pass
 
     def execute(self, blobs):
-        """The routine of module execution to save images."""
+        """The routine of module execution to save images.
+
+        Args:
+          blobs (list of `Blob`): The input blobs for execution. When saving,
+            each blob must contains a 0-dimensional "to_save" tensor whose value
+            is True, a 2 or 3-dimensional tensor whose default name is "image",
+            and a 0-dimensional "timestamp" tensor.
+
+        Returns:
+          list of `Blob`: The executed blobs. When saving, Each blob will be fed
+          a "abs_image_name" and a "relative_image_name" tensor. The tensor are
+          both 0-dimensional.
+
+        Raises:
+            RuntimeError: If the input "image" tensor is not 2 or 3-dimensional.
+        """
         # TODO(JiaKuan Su): Currently, I only handle the case for batch_size=1,
         # please help complete the case for batch_size>1.
         blob = blobs[0]
