@@ -10,6 +10,7 @@ const msg = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'))
 const MAX_ENABLED_ANALYZERS = 16
 const NUM_OF_BRAINS = 1
 const DEFAULT_REQUEST_TIMEOUT = 3000
+const DELETE_REQUEST_TIMEOUT = 6000
 const CH_API_BRAIN = 'ch_api_brain'
 
 /*
@@ -189,7 +190,7 @@ function deleteAnalyzer(req, res, next) {
         command: msg['ch_api_brain']['STOP_ANALYZER'],
         params: { id }
     })
-    requestBrain(request, (reply, isLastReply, closeResponse) => {
+    requestBrain(request, DELETE_REQUEST_TIMEOUT, (reply, isLastReply, closeResponse) => {
         if (reply['error']) {
             closeResponse()
             return next(createError(500, reply['error']['message']))
@@ -348,7 +349,7 @@ function deleteAnalyzerRuntime(req, res, next) {
         command: msg['ch_api_brain']['STOP_ANALYZER'],
         params: { id }
     })
-    requestBrain(request, (reply, isLastReply, closeResponse) => {
+    requestBrain(request, DELETE_REQUEST_TIMEOUT, (reply, isLastReply, closeResponse) => {
         if (reply['error']) {
             closeResponse()
             return next(createError(500, reply['error']['message']))
