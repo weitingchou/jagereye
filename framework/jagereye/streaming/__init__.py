@@ -11,6 +11,7 @@ from jagereye.streaming.blob import Blob
 from jagereye.streaming.modules.base import IModule
 from jagereye.streaming.modules.grayscale_modules import GrayscaleModule
 from jagereye.streaming.modules.display_modules import DisplayModule
+from jagereye.streaming.modules.io_modules import ImageSaveModule
 
 # Capturers
 from jagereye.streaming.capturers.base import ICapturer
@@ -27,6 +28,7 @@ __all__ = [
     'IModule',
     'GrayscaleModule',
     'DisplayModule',
+    'ImageSaveModule',
     # Capturers
     'ICapturer',
     'VideoStreamCapturer',
