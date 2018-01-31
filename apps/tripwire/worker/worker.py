@@ -5,6 +5,7 @@ import os
 import sys
 
 from jagereye.util import logging
+from jagereye.streaming import ImageSaveModule
 from jagereye.streaming import VideoStreamCapturer
 from jagereye.streaming import DisplayModule
 from jagereye.streaming import Pipeline
@@ -86,6 +87,11 @@ def worker_fn(params, files_dir, send_event):
                                           region_tuple,
                                           triggers)) \
             .pipe(TripwireModeModule(reserved_count=reserved_count)) \
+            .pipe(DrawTripwireModule(region_tuple,
+                                     normal_color,
+                                     alert_color,
+                                     always_draw=VISUALIZE)) \
+            .pipe(ImageSaveModule(files_dir, image_name='drawn_image')) \
             .pipe(VideoRecordModule(files_dir,
                                     reserved_count,
                                     FPS,
@@ -95,8 +101,7 @@ def worker_fn(params, files_dir, send_event):
             .pipe(OutputModule(send_event))
 
     if VISUALIZE:
-        pipeline.pipe(DrawTripwireModule(region_tuple, normal_color, alert_color)) \
-                .pipe(DisplayModule(image_name='drawn_image'))
+        pipeline.pipe(DisplayModule(image_name='drawn_image'))
 
     pipeline.start()
     pipeline.await_termination()

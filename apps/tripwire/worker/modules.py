@@ -347,6 +347,8 @@ class TripwireModeModule(IModule):
         if self._mode == _MODE.NORMAL:
             if in_region_labels.shape[0] > 0:
                 self._mode = _MODE.ALERT_START
+                blob.feed('to_save', np.array(True))
+                blob.feed('to_draw', np.array(True))
         elif self._mode == _MODE.ALERT_START:
             self._mode = _MODE.ALERTING
             self._not_detected_counter = 0
@@ -369,7 +371,6 @@ class TripwireModeModule(IModule):
 
 
 def _record_video(video_name,
-                  thumbnail_name,
                   fps,
                   video_size,
                   save_metadata,
@@ -381,7 +382,6 @@ def _record_video(video_name,
 
     Args:
       video_name (string): The name of recorded video.
-      thumbnail_name (string): The name of thumbnail image.
       fps (int): The FPS of recorded video.
       video_size (tuple): The size of recorded video. The tuple contains:
         width (int): The video width.
@@ -415,9 +415,6 @@ def _record_video(video_name,
             blob = task['blob']
             image = blob.fetch('image')
             video_writer.write(image)
-            if task['thumbnail']:
-                cv2.imwrite(thumbnail_name, image)
-                logging.info('Save thumbnail {}'.format(thumbnail_name))
 
             # Update metadata if necessary.
             if save_metadata:
@@ -455,7 +452,6 @@ class VideoRecordModule(IModule):
                  fps,
                  image_name='image',
                  video_format='mp4',
-                 thumbnail_format='jpg',
                  save_metadata=True,
                  metadata_frame_names=[],
                  metadata_custom_names=[]):
@@ -470,8 +466,6 @@ class VideoRecordModule(IModule):
           image_name (string): The name of input tensor to read. Defaults to
             "image".
           video_format (string): The format of video. Defaults to "mp4".
-          thumbnail_format (string): The format of thumbnail image. Defaults to
-            "mp4".
           save_metadata (bool): To store the metadata of the video clip or not.
             Defaults to True.
           metadata_frame_names (list of string): The names of tensors to store
@@ -484,7 +478,6 @@ class VideoRecordModule(IModule):
         self._files_dir = files_dir
         self._reserved_count = reserved_count
         self._video_format = video_format
-        self._thumbnail_format = thumbnail_format
         self._fps = fps
         self._image_name = image_name
         self._save_metadata = save_metadata
@@ -545,13 +538,9 @@ class VideoRecordModule(IModule):
             video_file = '{}.{}'.format(timestamp, self._video_format)
             abs_video_name = self._abs_file_name(video_file)
             relative_video_name = self._relative_file_name(video_file)
-            thumbnail_file = '{}.{}'.format(timestamp, self._thumbnail_format)
-            abs_thumbnail_name = self._abs_file_name(thumbnail_file)
-            relative_thumbnail_name = self._relative_file_name(thumbnail_file)
             video_size = (im_width, im_height)
             self._queue = Queue()
             args = (abs_video_name,
-                    abs_thumbnail_name,
                     self._fps,
                     video_size,
                     self._save_metadata,
@@ -568,23 +557,19 @@ class VideoRecordModule(IModule):
             for reserved_blob in self._reserved_blobs:
                 self._queue.put({
                     'command': 'RECORD',
-                    'blob': reserved_blob,
-                    'thumbnail': False
+                    'blob': reserved_blob
                 })
             # Record current image.
             self._queue.put({
                 'command': 'RECORD',
-                'blob': blob,
-                'thumbnail': True
+                'blob': blob
             })
 
             blob.feed('video_name', np.array(relative_video_name))
-            blob.feed('thumbnail_name', np.array(relative_thumbnail_name))
         elif mode == _MODE.ALERTING:
             self._queue.put({
                 'command': 'RECORD',
-                'blob': blob,
-                'thumbnail': False
+                'blob': blob
             })
         elif mode == _MODE.ALERT_END:
             self._queue.put({
@@ -636,7 +621,7 @@ class OutputModule(IModule):
             timestamp = float(blob.fetch('timestamp'))
             if mode == _MODE.ALERT_START:
                 video_name = str(blob.fetch('video_name'))
-                thumbnail_name = str(blob.fetch('thumbnail_name'))
+                thumbnail_name = str(blob.fetch('relative_image_name'))
                 triggered = blob.fetch('labels').tolist()
                 event_type = 'tripwire_alert'
                 content = {
@@ -663,7 +648,7 @@ class DrawTripwireModule(IModule):
     # TODO(JiaKuan Su): Please fill the detailed docstring.
     """The module for drawing the tripwire."""
 
-    def __init__(self, region, normal_color, alert_color):
+    def __init__(self, region, normal_color, alert_color, always_draw=False):
         """Create a new `DrawTripwireModule`.
 
         Args:
@@ -680,10 +665,12 @@ class DrawTripwireModule(IModule):
             B (float): The blue channel, range in [0, 1].
             G (float): The green channel, range in [0, 1].
             R (float): The red channel, range in [0, 1].
+          always_draw (bool): Always draw the image or not. Defaults to False.
         """
         self._region = region
         self._normal_color = normal_color
         self._alert_color = alert_color
+        self._always_draw = always_draw
 
     def prepare(self):
         """The routine of module preparation."""
@@ -695,14 +682,18 @@ class DrawTripwireModule(IModule):
         # TODO(JiaKuan Su): Currently, I only handle the case for batch_size=1,
         # please help complete the case for batch_size>1.
         blob = blobs[0]
-        image = blob.fetch('image')
-        mode = int(blob.fetch('mode'))
-        if mode == _MODE.NORMAL:
-            color = self._normal_color
-        else:
-            color = self._alert_color
-        drawn_image = self._draw_tripwire(image, color)
-        blob.feed('drawn_image', drawn_image)
+        to_draw = self._always_draw or \
+                  (blob.has('to_draw') and blob.fetch('to_draw').tolist())
+
+        if to_draw:
+            image = blob.fetch('image')
+            mode = blob.fetch('mode').tolist()
+            if mode == _MODE.NORMAL:
+                color = self._normal_color
+            else:
+                color = self._alert_color
+            drawn_image = self._draw_tripwire(image, color)
+            blob.feed('drawn_image', drawn_image)
 
         return blobs
 
