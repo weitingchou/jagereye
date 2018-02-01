@@ -82,7 +82,7 @@ services:
     {%- if apps %}
     {%- for app, content in apps.items() %}
     {{app}}:
-        image: "jagereye/brain_{{app}}:{{content.version}}"
+        image: "jagereye/brain_{{app}}"
         network_mode: "{{content.network_mode}}"
         {%- if services %}
         depends_on:

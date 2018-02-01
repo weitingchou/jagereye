@@ -1,19 +1,22 @@
 const request = require('request-promise');
 const HttpStatus = require('http-status-codes');
+const WebSocket = require('ws');
 const MongoClient = require('mongodb').MongoClient;
 const Docker = require('dockerode');
 const dockerCli = new Docker();
 
 const format = require('util').format;
 
-const redisAsync = require('./redisAsync.js')
+const redisAsync = require('./redisAsync.js');
 const {laterInMs} = require('./utils.js');
+const video = require('./videos/app.js');
 
-START_TIMEOUT = 6000;
-DELETE_TIMEOUT = 5000;
-HBEAT_TIMEOUT = 4000;
+const START_TIMEOUT = 6500;
+const DELETE_TIMEOUT = 6000;
+const HBEAT_TIMEOUT = 4000;
+const MAX_TIMEOUT = 15000;
 
-MAX_TIMEOUT = 8000;
+const videoAppPort = 8081;
 
 describe('Analyzer Operations: ', () => {
   describe('green path(create => start => get status => delete): ', () => {
@@ -21,19 +24,24 @@ describe('Analyzer Operations: ', () => {
     let type = 'tripwire';
     let redisCli = null;
     let mongoCli = null;
+    let videoApp = null;
+    let testStartTime = (new Date().getTime() / 1000)
 
     beforeAll(() => {
+      videoApp = new video.videoApp(videoAppPort);
+      videoApp.start();
+
       redisCli = new redisAsync.client();
 
       return MongoClient.connect('mongodb://localhost:27017/jager_test')
         .then((db) => {
           mongoCli = db;
-          let analyzer_col = db.collection('analyzers');
-          return analyzer_col.remove({});
+          return db.dropDatabase();
         });
     });
 
     afterAll(() => {
+      videoApp.stop();
       redisCli.quit();
       mongoCli.close();
     });
@@ -45,7 +53,7 @@ describe('Analyzer Operations: ', () => {
         "enabled": true,
         "source": {
           "mode": "stream",
-          "url": "http://10.10.0.4/video.mjpg"
+          "url": "http://localhost:"+videoAppPort+"/video.mp4"
         },
         "pipelines": [
           {
@@ -53,12 +61,12 @@ describe('Analyzer Operations: ', () => {
             "params": {
               "region": [
                 {
-                  "x": 0,
-                  "y": 0
+                  "x": 800,
+                  "y": 100
                 },
                 {
-                  "x": 200,
-                  "y": 200
+                  "x": 1000,
+                  "y": 700
                 }
               ],
               "triggers": [
@@ -149,6 +157,64 @@ describe('Analyzer Operations: ', () => {
       done();
     });
     // ----- test('get status of the analyzer')
+
+    test('wait for notification', async (done) => {
+      let ws = new WebSocket('ws://localhost:5000/notification');
+      ws.on('message', function incoming(data) {
+        try {
+          data = data.replace(/'/g, '"');
+          data = JSON.parse(data);
+          let notifiedInfo = data[0];
+          expect(notifiedInfo).toHaveProperty('timestamp');
+          expect(notifiedInfo).toHaveProperty('analyzerId');
+          expect(notifiedInfo).toHaveProperty('type');
+          expect(notifiedInfo).toHaveProperty('appName');
+          expect(notifiedInfo).toHaveProperty('content');
+          expect(notifiedInfo).toHaveProperty('date');
+        } catch (err) {
+          expect(err).toBeNull();
+        } finally {
+          ws.close();
+          done();
+        };
+      });
+
+    }, MAX_TIMEOUT);
+    // ----- test('wait for events')
+
+    test('query events', async (done) => {
+      let now = (new Date().getTime() / 1000)
+      let postData = {
+        timestamp: {
+          start: testStartTime,
+          end: now
+        },
+        analyzers: [analyzerId]
+      };
+
+      let options =  {
+        method: 'POST',
+        uri: 'http://localhost:5000/api/v1/events',
+        body: postData,
+        json: true,
+        resolveWithFullResponse: true
+      };
+      let result = await request(options);
+      expect(result.statusCode).toBe(HttpStatus.OK);
+      expect(result).toHaveProperty('body');
+
+      let eventInfo = result.body[0];
+      expect(eventInfo).toHaveProperty('timestamp');
+      expect(eventInfo).toHaveProperty('analyzerId');
+      expect(eventInfo.analyzerId).toBe(analyzerId);
+      expect(eventInfo).toHaveProperty('type');
+      expect(eventInfo).toHaveProperty('appName');
+      expect(eventInfo).toHaveProperty('content');
+      expect(eventInfo).toHaveProperty('type');
+
+      done();
+    });
+    // ----- test('query events')
 
     test('delete the analyzer', async (done) => {
       let options =  {
