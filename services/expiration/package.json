@@ -1,0 +1,17 @@
+{
+  "name": "expiration",
+  "version": "0.0.1",
+  "description": "JagerEye expiration service to clean old data periodicially",
+  "main": "server.js",
+  "author": "JiaKuan Su",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "cron": "^1.3.0",
+    "lodash": "^4.17.5",
+    "mongoose": "^5.0.3"
+  }
+}
