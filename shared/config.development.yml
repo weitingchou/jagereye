@@ -29,6 +29,11 @@ services:
             docker_sock: /var/run/docker.sock:/var/run/docker.sock
         worker:
             network_mode: host
+    expiration:
+        version: "0.0.1"
+        network_mode: host
+        volumes:
+            shared_dir: ~/jagereye_shared:/root/jagereye_shared
 apps:
     tripwire:
         version: "0.0.1"
