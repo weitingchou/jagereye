@@ -10,7 +10,6 @@ If you open a GitHub issue, here is our policy:
 - **Python version**:
 - **Exact command to reproduce**:
 - **Others**:
-c
 <!--
 You can obtain the JagerEye version with
 
@@ -18,7 +17,7 @@ python -c "import jagereye; print(jagereye.__version__)"
 -->
 
 ### Describe the problem or feature
-<!-- Describe the problem orf feature clearly here. -->
+<!-- Describe the problem or feature clearly here. -->
 
 ### Source code / logs
 <!-- Include any logs or source code that would be helpful to diagnose the problem. If including tracebacks, please include the full traceback. 
