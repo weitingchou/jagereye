@@ -62,28 +62,50 @@ class EventAgent {
 
     // Delete events before a given day(s) ago.
     async deleteBefore(days) {
+        console.log(`== Try to delete data before ${days} day(s) ago ==`);
+
         // Convert days into seconds.
         const seconds = days * 24 * 60 * 60;
         // Calculate the maximum timestamp (in seconds) that allows events to
         // live.
         const maxTimestamp = Date.now() / 1000 - seconds;
 
-        console.log(`Try to delete data before ${days} day(s) ago`);
-
-        await this.delete({
+        await this.delete([{
             $match: {
                 timestamp: {
                     $lte: maxTimestamp,
                 },
             },
-        });
+        }]);
 
-        console.log(`Success to delete data before ${days} day(s) ago`);
+        console.log(`== Success to delete data before ${days} day(s) ago ==`);
+    }
+
+    // Delete events if the number of stored records is more than a given
+    // maximum number. If exceeds, the oldest records will be deleted first.
+    // TODO(JiaKuan SU): We can also consider to calculate the storage space
+    // directly.
+    async deleteIfMoreThan(maxNum) {
+        console.log(`== Try to delete data if the stored records is more than ${maxNum} ==`);
+
+        const count = await this.baseModel.model.count();
+
+        if (count > maxNum) {
+            await this.delete([{
+                $sort: {
+                    timestap: -1
+                },
+            }, {
+                $limit: count - maxNum
+            }]);
+        }
+
+        console.log(`== Success to delete data if the stored records is more than ${maxNum} ==`);
     }
 
     // Generic function for events deletion.
-    async delete(filter) {
-        const aggregations = [filter, {
+    async delete(filters) {
+        const aggregations = concat(filters, {
             $group: {
                 _id: '$appName',
                 eventIds: {
@@ -93,7 +115,7 @@ class EventAgent {
                     $push: '$content',
                 },
             },
-        }];
+        });
 
         // Find all matched base events and group them by application names.
         const eventGroups = await this.baseModel.model.aggregate(aggregations);
