@@ -104,7 +104,7 @@ class Brain(object):
         anal_ids, worker_ids = await self._worker_agent.get_all_anal_and_worker_ids()
         if not anal_ids:
             return
-        self._logger.debug('Start restarting if there are configuration records of analyzers')
+        self._logger.info('Start restarting if there are configuration records of analyzers')
         # reset all worker record like 'status' to WorkerStatus.INITIAL
         await self._worker_agent.mset_worker_status(worker_ids, WorkerStatus.INITIAL.name)
         self._logger.debug('Reset all workers status to INITIAL')
@@ -125,7 +125,7 @@ class Brain(object):
         await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
         # TODO(Ray): should reset the 'pipelines' for each worker?
         # TODO(Ray): maybe the containers' pipelines is different to the 'pipelines' field in mem db
-        self._logger.debug('Finish restarting')
+        self._logger.info('Finish restarting')
 
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers
@@ -149,9 +149,9 @@ class Brain(object):
             self._logger.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
         else:
             if verb == 'hshake-3':
-                self._logger.debug('Received "hshake-3" in {func}: "{subject} {reply}": {data}'.\
+                self._logger.info('Received "hshake-3" in {func}: "{subject} {reply}": {data}'.\
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
-                self._logger.debug('finish handshake')
+                self._logger.info('finish handshake')
 
                 # change worker status
                 worker_id = context['workerID']
@@ -185,7 +185,7 @@ class Brain(object):
                     self._logger.debug('Receive "hshake3" in {}: no ticket for analyzer {}'.\
                             format(get_func_name(), analyzer_id))
             elif verb == 'config_ok':
-                self._logger.debug('Received "config_ok" in {func}: "{subject} {reply}": {data}'.\
+                self._logger.info('Received "config_ok" in {func}: "{subject} {reply}": {data}'.\
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
                 ticket_id = context['ticket']['ticket_id']
                 worker_id = context['workerID']
@@ -208,7 +208,6 @@ class Brain(object):
                 worker_id = context['workerID']
                 # retrieve analyzer_id
                 analyzer_id = await self._worker_agent.get_anal_id(worker_id)
-                self._logger.debug('Receive event inform in {}.'.format(get_func_name()))
                 # consume events from the worker
                 events = await self._event_agent.consume_from_worker(worker_id)
                 if not events:
@@ -249,7 +248,7 @@ class Brain(object):
             self._logger.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
         else:
             if verb == 'hshake-1':
-                self._logger.debug('Received "hshake-1" msg in {func}: "{subject}": {data}'.\
+                self._logger.info('Received "hshake-1" msg in {func}: "{subject}": {data}'.\
                         format(func=get_func_name(), subject=ch, reply=reply, data=msg))
                 try:
                     worker_id = context['workerID']
@@ -287,7 +286,7 @@ class Brain(object):
         msg = jsonify(recv.data)
         timestamp = round(time.time())
 
-        self._logger.debug('Received in api_handler() "{subject} {reply}": {data}'.\
+        self._logger.info('Received in api_handler() "{subject} {reply}": {data}'.\
                  format(subject=ch, reply=reply, data=msg))
 
         try:
@@ -319,13 +318,13 @@ class Brain(object):
             worker_id = await self._worker_agent.get_worker_id(analyzer_id)
             if worker_id:
                 # TODO(Ray): if yes, just re-config worker
-                self._logger.debug('worker exists, re-configure it')
+                self._logger.info('worker {} exists, re-configure it'.format(worker_id))
                 # XXX: We haven't implement woker reconfiguring yet, so we need
                 # to delete ticket here, otherwise it will block future
                 # operations on analyzer 'analyzer_id'.
                 await self._ticket_agent.delete(analyzer_id)
             else:
-                self._logger.debug('Create a worker for analyzer "{}"'.format(analyzer_id))
+                self._logger.info('Create a worker for analyzer "{}"'.format(analyzer_id))
                 # reply back to api_server
                 await self._nats_cli.publish(reply, jsondumps(self._API.reply_status(WorkerStatus.CREATE.name)).encode())
                 ticket_id = analyzer_id
