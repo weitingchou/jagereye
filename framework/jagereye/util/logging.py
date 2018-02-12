@@ -11,8 +11,14 @@ from logging import FATAL # pylint: disable=unused-import
 from logging import INFO # pylint: disable=unused-import
 from logging import WARN # pylint: disable=unused-import
 
+from jagereye.util import static_util
+from jagereye.util.generic import get_config
 
-_logging.basicConfig(level=_logging.DEBUG)
+CONFIG = get_config()['logging']
+
+LEVEL = CONFIG['level'].upper()
+
+_logging.basicConfig(level=LEVEL)
 _logger = _logging.getLogger('jagereye')
 
 

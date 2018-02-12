@@ -33,3 +33,10 @@ apps:
     tripwire:
         version: "0.0.1"
         network_mode: host
+logging:
+    output:
+        type: "std"
+        host: ""
+        port: ""
+        facility: ""
+    level: "debug"
