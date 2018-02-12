@@ -34,9 +34,24 @@ apps:
         version: "0.0.1"
         network_mode: host
 logging:
-    output:
-        type: "std"
-        host: ""
-        port: ""
-        facility: ""
-    level: "debug"
+    version: 1
+    disable_existing_loggers: False
+    formatters:
+        simple:
+            format: "%(asctime)s - %(component)s - %(levelname)s - %(message)s"
+    handlers:
+        console:
+            class: logging.StreamHandler
+            level: DEBUG
+            formatter: simple
+            stream: ext://sys.stdout
+        syslog:
+            class: logging.handlers.SysLogHandler
+            level: DEBUG
+            formatter: simple
+            address: ['10.10.0.2', 514]
+            facility: local1
+    loggers:
+        default:
+            handlers: [syslog]
+            level: DEBUG
