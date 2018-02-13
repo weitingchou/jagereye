@@ -15,6 +15,7 @@ from jagereye.streaming.exceptions import RetryError
 from jagereye.streaming.blob import Blob
 from jagereye.streaming.capturers.base import ICapturer
 from jagereye.util import logging
+from jagereye.util.generic import exec_timeout
 from jagereye.util.generic import now
 
 
@@ -36,14 +37,16 @@ class VideoStreamCapturer(ICapturer):
     string.
     """
 
-    def __init__(self, src):
+    def __init__(self, src, retry_timeout=30):
         """Create a new `VideoStreamCapturer`.
 
         Args:
-          src(string): The video source. It can be a video file name, or live
+          src (string): The video source. It can be a video file name, or live
             stream URL such as RTSP, Motion JPEG.
+          retry_timeout (int): The limit of retry timeout. Defaults to 30.
         """
         self._src = src
+        self._retry_timeout = retry_timeout
         self._cap = None
         self._retry = False
 
@@ -53,13 +56,20 @@ class VideoStreamCapturer(ICapturer):
         stream URL such as RTSP, Motion JPEG."""
         return self._src
 
+    @property
+    def retry_timeout(self):
+        """int: The limit of retry timeout."""
+        return self._retry_timeout
+
     def prepare(self):
         """The routine of video stream capturer preparation.
 
         Raises:
           RuntimeError: If the video stream is not opened.
         """
-        self._cap = cv2.VideoCapture(self._src)
+        self._cap = cv2.VideoCapture()
+        self._cap.open(self._src)
+
         if not self._cap.isOpened():
             raise RuntimeError(
                 'The video stream {} is not opened.'.format(self._src))
@@ -75,9 +85,13 @@ class VideoStreamCapturer(ICapturer):
           EndOfVideoError: If the stream ends.
         """
         if self._retry:
-            self._cap.release()
-            self._cap = cv2.VideoCapture(self._src)
-            self._retry = False
+            try:
+                logging.info('Try to open {}'.format(self._src))
+                exec_timeout(self._retry_timeout, self._cap.open, self._src)
+                self._retry = False
+            except TimeoutError as e:
+                logging.warn('Fail to open {} due to timeout: {}'.format(self._src, e))
+                self._raise_retry()
 
         success, image = self._cap.read()
         timestamp = np.array(now())
@@ -85,7 +99,7 @@ class VideoStreamCapturer(ICapturer):
         if not success:
             if self._is_live_stream():
                 self._retry = True
-                raise RetryError('Try to reconnect to {}'.format(self._src))
+                self._raise_retry()
             else:
                 raise EndOfVideoError('Video {} ends'.format(self._src))
 
@@ -104,6 +118,10 @@ class VideoStreamCapturer(ICapturer):
         # TODO(JiaKuan Su): Also need check the URL file format, such as
         # "http://url.to/vdieo.mp4"
         return urlparse(self._src).scheme != ''
+
+    def _raise_retry(self):
+        """Raise a retry request."""
+        raise RetryError('Try to reconnect to {}'.format(self._src))
 
     def destroy(self):
         """The routine of video stream capturer destruction."""
