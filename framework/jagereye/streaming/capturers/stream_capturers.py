@@ -86,9 +86,12 @@ class VideoStreamCapturer(ICapturer):
         """
         if self._retry:
             try:
-                logging.info('Try to open {}'.format(self._src))
+                logging.info('Start trying to open {}'.format(self._src))
+
                 exec_timeout(self._retry_timeout, self._cap.open, self._src)
                 self._retry = False
+
+                logging.info('End trying to open {}'.format(self._src))
             except TimeoutError as e:
                 logging.warn('Fail to open {} due to timeout: {}'.format(self._src, e))
                 self._raise_retry()
