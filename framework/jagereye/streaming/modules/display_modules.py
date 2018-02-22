@@ -57,7 +57,7 @@ class DisplayModule(IModule):
             image = blobs[0].fetch(self._image_name)
             if image.ndim != 2 and image.ndim != 3:
                 raise RuntimeError('The input "image" tensor is not '
-                                   '3-dimensional.')
+                                   '2 or 3-dimensional.')
             cv2.imshow(self._window_name, image)
             cv2.waitKey(1)
         return blobs
