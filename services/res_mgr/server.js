@@ -119,7 +119,7 @@ async function createWorker(workerId, workerName) {
                 Config:{
                     'syslog-address': 'udp://'+CONFIG.logging.syslog.host+':'+CONFIG.logging.syslog.port,
                     'syslog-facility': 'local1',
-                    'tag': workerId + ' - thrid-party pid:'
+                    'tag': workerId + ' - thrid_party pid:'
                 }
         },
         Image: workerName,

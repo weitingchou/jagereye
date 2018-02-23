@@ -94,7 +94,12 @@ services:
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
         {%- if environ.JAGERENV == 'product' %}
-        command: "brain.py 2>&1| logger -n {{logging.syslog.host}} -P {{logging.syslog.port}} -p local1.error -t 'brain:third_party' --rfc5424=nohost"
+        logging:
+            driver: syslog
+            options:
+                syslog-address: "udp://{{logging.syslog.host}}:{{logging.syslog.host}}"
+                syslog-facility: "local1"
+                tag: " - brain - third_party"
         {%- endif %}
     {%- endfor %}
     {%- endif %}
