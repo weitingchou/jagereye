@@ -3,7 +3,6 @@
 import inspect
 import time
 import yaml
-import os
 
 from jagereye.util import static_util
 
@@ -21,7 +20,6 @@ def now():
     return time.time()
 
 def get_config():
-    JAGERENV = os.environ['JAGERENV']
-    config_file = 'config.{}.yml'.format(JAGERENV)
+    config_file = 'config.yml'
     with open(static_util.get_path(config_file), 'r') as f:
         return yaml.load(f)

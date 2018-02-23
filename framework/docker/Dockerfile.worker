@@ -37,7 +37,7 @@ RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
 
 # Install Python packages.
 RUN pip3 --no-cache-dir install \
-        numpy
+        numpy pyyaml
 
 # Install OpenCV.
 # TODO(JiaKuan Su):

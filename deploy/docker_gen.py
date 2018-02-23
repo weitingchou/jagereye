@@ -85,6 +85,10 @@ class Generator(object):
         context = self._config['apps']
         return context
 
+    def _get_logging_context(self):
+        context = self._config['logging']
+        return context
+
     def generate(self, target, is_build=False):
         environ = os.environ
         environ['SHARED_ROOT'] = os.path.expanduser('~')
@@ -94,7 +98,7 @@ class Generator(object):
             context['services'] = self._get_service_context(is_build)
         if target == 'apps' or target == 'all':
             context['apps'] = self._get_app_context()
-
+        context['logging'] = self._get_logging_context()
         if is_build is True:
             context['build'] = True
 

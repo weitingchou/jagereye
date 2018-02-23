@@ -54,7 +54,7 @@ class Brain(object):
             mq_host (str): the host and port of nats server
         """
         self._typename = typename
-        self._logger = logging.Logger(self.__class__.__name__)
+        self._logger = logging.Logger(component='brain')
         self._API = API(self._typename)
         self._main_loop = asyncio.get_event_loop()
         # TODO(Ray): check NATS is connected to server, error handler
@@ -158,7 +158,7 @@ class Brain(object):
                 # check worker status is HSHAKE-1
                 worker_status = await self._worker_agent.get_status(worker_id=worker_id)
                 if worker_status != WorkerStatus.HSHAKE_1.name:
-                    self._logger.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
+                    self._logger.error('Receive "hshake3" in {}: with unexpected worker status "{}"'.\
                             format(get_func_name(), worker_status))
                     return
                 # update worker status to READY

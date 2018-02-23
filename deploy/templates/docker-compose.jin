@@ -82,7 +82,7 @@ services:
     {%- if apps %}
     {%- for app, content in apps.items() %}
     {{app}}:
-        image: "jagereye/brain_{{app}}:{{content.version}}"
+        image: "jagereye/brain_{{app}}"
         network_mode: "{{content.network_mode}}"
         {%- if services %}
         depends_on:
@@ -93,5 +93,8 @@ services:
         {%- endif %}
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
+        {%- if environ.JAGERENV == 'product' %}
+        command: "brain.py 2>&1| logger -n {{logging.syslog.host}} -P {{logging.syslog.port}} -p local1.error -t 'brain:third_party' --rfc5424=nohost"
+        {%- endif %}
     {%- endfor %}
     {%- endif %}

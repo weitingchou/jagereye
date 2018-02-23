@@ -24,6 +24,8 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 
 # Install JagerEye framework library.
 # TODO(JiaKuan Su): Use .pyc only.
+RUN pip3 --no-cache-dir install pyyaml
+
 WORKDIR jagereye
 COPY setup.py .
 COPY setup.cfg .

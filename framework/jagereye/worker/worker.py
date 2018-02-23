@@ -24,7 +24,6 @@ class Worker(object):
                  mq_host='nats://localhost:4222',
                  mem_db_host='redis://localhost:6379'):
         self._main_loop = asyncio.get_event_loop()
-        
         # TODO(Ray): check NATS is connected to server, error handler
         # connect NATs server, default is nats://localhost:4222
         # TODO(Ray): check mq_host is valid
@@ -32,6 +31,7 @@ class Worker(object):
         self._mem_db_cli = None
         self._name = name
         self._worker_id = worker_id
+        self._logger = logging.Logger(self._worker_id)
         relative_files_dir = os.path.join(name, worker_id)
         abs_files_dir = os.path.join(shared_dir, relative_files_dir)
         abs_files_dir = os.path.expanduser(abs_files_dir)
@@ -73,9 +73,9 @@ class Worker(object):
             await self._nats_cli.subscribe(self._ch_brain_to_worker, cb=self._brain_handler)
             await self._nats_cli.publish(CH_BRAIN, str(hshake_1_req).encode())
             self._status = STATUS.HSHAKE_1
-            logging.debug("start handshake, status: hshake-1")
+            self._logger.debug("start handshake, status: hshake-1")
         else:
-            logging.debug("expect worker status be 'initial' when setup")
+            self._logger.debug("expect worker status be 'initial' when setup")
 
     async def _brain_handler(self, recv):
         ch = recv.subject
@@ -87,7 +87,7 @@ class Worker(object):
         context = msg["context"]
 
         if (verb == "hshake-2") and (self._status == STATUS.HSHAKE_1):
-            logging.debug("Received 'hshake-2' msg in _brain_handler(): '{subject} {reply}': {data}".\
+            self._logger.debug("Received 'hshake-2' msg in _brain_handler(): '{subject} {reply}': {data}".\
                     format(subject=ch, reply=reply, data=msg))
             if context["workerID"] == self._worker_id:
                 hshake_3_req = {
@@ -101,7 +101,7 @@ class Worker(object):
                 await self._nats_cli.publish(self._ch_worker_to_brain, str(hshake_3_req).encode())
 
         if (verb == "config") and (self._status == STATUS.READY):
-            logging.debug("Received 'config' msg in _brain_handler(): '{subject} {reply}': {data}".\
+            self._logger.debug("Received 'config' msg in _brain_handler(): '{subject} {reply}': {data}".\
                     format(subject=ch, reply=reply, data=msg))
             if context["workerID"] == self._worker_id:
                 # TODO(Ray): check pipeline existed,
@@ -134,7 +134,7 @@ class Worker(object):
           timestamp (float): The timestamp of the event.
           content (dict): The event content.
         """
-        logging.debug('Try to send event (app_name = "{}", type = "{}", timestamp = "{}", content'
+        self._logger.debug('Try to send event (app_name = "{}", type = "{}", timestamp = "{}", content'
                       ' = "{}") to brain'.format(self._name, event_type, timestamp, content))
 
         # Construct the key of event queue.
@@ -160,7 +160,7 @@ class Worker(object):
                                                str(request).encode())
         asyncio.run_coroutine_threadsafe(async_publish, self._main_loop)
 
-        logging.debug('Success to send event (app_name = "{}", type = "{}", timestamp = "{}", '
+        self._logger.debug('Success to send event (app_name = "{}", type = "{}", timestamp = "{}", '
                       'content = "{}") to brain'.format(self._name, event_type, timestamp, content))
 
     async def _hbeat_publisher(self):
@@ -176,10 +176,10 @@ class Worker(object):
         await self._nats_cli.publish(self._ch_worker_to_brain, str(hbeat_req).encode())
 
     def register_pipeline(self, pipeline):
-        logging.debug("register pipeline in register_pipeline()")
+        self._logger.debug("register pipeline in register_pipeline()")
         # check if the pipeline is function or not
         if not callable(pipeline):
-            logging.error("wrong type of pipeline in register_pipeline()")
+            self._logger.error("wrong type of pipeline in register_pipeline()")
 
         self.pipeline = pipeline
 
