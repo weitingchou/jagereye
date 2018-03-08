@@ -12,8 +12,9 @@ from jagereye.streaming.modules.base import IModule
 from jagereye.streaming.modules.grayscale_modules import GrayscaleModule
 from jagereye.streaming.modules.display_modules import DisplayModule
 
-# Streaming
-from jagereye.streaming.streaming import VideoStreamReader, VideoStreamWriter
+# Capturers
+from jagereye.streaming.capturers.base import ICapturer
+from jagereye.streaming.capturers.stream_capturers import VideoStreamCapturer
 
 # Pipeline
 from jagereye.streaming.pipeline import Pipeline
@@ -26,9 +27,9 @@ __all__ = [
     'IModule',
     'GrayscaleModule',
     'DisplayModule',
-    # Streaming
-    'VideoStreamReader',
-    'VideoStreamWriter',
+    # Capturers
+    'ICapturer',
+    'VideoStreamCapturer',
     # Pipeline
     'Pipeline'
 ]
