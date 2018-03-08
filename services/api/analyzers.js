@@ -7,10 +7,9 @@ const fs = require('fs')
 const router = express.Router()
 
 const msg = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'))
-const MAX_ENABLED_ANALYZERS = 16
+const MAX_ANALYZERS = 16
 const NUM_OF_BRAINS = 1
 const DEFAULT_REQUEST_TIMEOUT = 3000
-const CH_API_BRAIN = 'ch_api_brain'
 
 /*
  * Projections
@@ -18,24 +17,18 @@ const CH_API_BRAIN = 'ch_api_brain'
 const getConfProjection = {
     '_id': 1,
     'name': 1,
-    'type': 1,
-    'enabled': 1,
     'source': 1,
     'pipelines': 1
 }
 const getConfSourceProjection = {
     '_id': 0,
     'name': 0,
-    'type': 0,
-    'enabled': 0,
     'source': 1,
     'pipelines': 0
 }
 const getConfPipelineProjection = {
     '_id': 0,
     'name': 0,
-    'type': 0,
-    'enabled': 0,
     'source': 0,
     'pipelines': 1
 }
@@ -68,16 +61,16 @@ function postReqValidator(req, res, next) {
 
     // TODO: Should find a way to enforce maximum enabled analyzers
     //       at MongoDB writing
-    models['analyzers'].count({'enabled': true}, (err, count) => {
+    models['analyzers'].count({}, (err, count) => {
         if (err) { return next(createError(500, null, err)) }
-        if (count >= MAX_ENABLED_ANALYZERS) {
+        if (count >= MAX_ANALYZERS) {
             return next(createError(400, 'Exceeded maximum number of analyzers allow to be enabled'))
         }
         next()
     })
 }
 
-function requestBrain(request, timeout, callback) {
+function requestBackend(request, timeout, callback) {
     let reqTimeout = timeout
     let cb = callback
     let ignore = false
@@ -99,7 +92,7 @@ function requestBrain(request, timeout, callback) {
         clearTimeout(timer)
     }
 
-    nats.request(CH_API_BRAIN, request, {'max': NUM_OF_BRAINS}, (reply) => {
+    nats.request('api.analyzer', request, {'max': NUM_OF_BRAINS}, (reply) => {
         if (!ignore) {
             count += 1
             let isLastReply = count === NUM_OF_BRAINS
@@ -128,26 +121,49 @@ function requestBrain(request, timeout, callback) {
     })
 }
 
-function getAllAnalyzerConfig(req, res, next) {
+function getAnalyzers(req, res, next) {
     models['analyzers'].find({}, getConfProjection, (err, list) => {
         if (err) { return next(createError(500, null, err)) }
-        res.send(list)
+        if (list.length === 0) { return res.status(200).send([]) }
+        const request = JSON.stringify({
+            command: 'READ',
+            params: { id: list.map(x => x['_id']) }
+        })
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
+            if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                return next(createError(500, null, error))
+            }
+            if (reply['error']) {
+                closeResponse()
+                return next(createError(500, reply['error']['message']))
+            }
+            // TODO: rollback saved record if any error occurred
+            closeResponse()
+            result = list.map(x => {
+                data = x.toJSON()
+                data['status'] = reply['result'][x['_id']]
+                return data
+            })
+            return res.status(200).send(result)
+        })
     })
 }
 
-function createAnalyzerConfig(req, res, next) {
+function createAnalyzer(req, res, next) {
     /* Validate request */
-    req.checkBody('name', 'Analyzer name is required').notEmpty()
+    req.checkBody('name', 'name is required').notEmpty()
+    req.checkBody('source', 'source is required').notEmpty()
+    req.checkBody('pipelines', 'pipeline is required').notEmpty()
     const errors = req.validationErrors()
     if (errors) {
-        return next(createError(400, errors.array()['msg']))
+        return next(createError(400, errors[0]['msg']))
     }
 
-    let config = { name: req.body['name'] }
-    if (req.body['type']) { config['type'] = req.body['type'] }
-    if (req.body['enabled']) { config['enabled'] = req.body['enabled'] }
-    if (req.body['source']) { config['source'] = req.body['source'] }
-    if (req.body['pipelines']) { config['pipelines'] = req.body['pipelines'] }
+    name = req.body['name']
+    source = req.body['source']
+    pipelines = req.body['pipelines']
+    let config = { name, source, pipelines }
     const analyzer = new models['analyzers'](config)
     analyzer.save((err, saved) => {
         if (err) {
@@ -162,234 +178,167 @@ function createAnalyzerConfig(req, res, next) {
             }
             return next(createError(500, null, err))
         }
-        res.status(201).send({id: saved.id})
-    })
-}
-
-function deleteAllAnalyzers(req, res, next) {
-    // TODO: Implement the function
-}
-
-function getAnalyzerConfig(req, res, next) {
-    const id = req.params['id']
-    models['analyzers'].findById(id, getConfProjection, (err, result) => {
-        if (err) {
-            return next(createError(500, null, err))
-        }
-        if (result === null) {
-            return next(createError(404))
-        }
-        res.send(result)
-    })
-}
-
-function deleteAnalyzer(req, res, next) {
-    const id = req.params['id']
-    const request = JSON.stringify({
-        command: msg['ch_api_brain']['STOP_ANALYZER'],
-        params: { id }
-    })
-    requestBrain(request, (reply, isLastReply, closeResponse) => {
-        if (reply['error']) {
-            closeResponse()
-            return next(createError(500, reply['error']['message']))
-        }
-        if (reply['result']) {
-            closeResponse()
-            models['analyzers'].findByIdAndRemove(id, (err) => {
-                if (err) {
-                    return next(createError(500, null, err))
-                }
-                res.status(200).send({ result: { id } })
-            })
-        }
-        else if (reply['code']) {
-            if (reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: deleting runtime instance of analyzer "${id}"`)
-                return next(createError(500, null, error))
-            }
-            if (reply['code'] === msg['ch_api_brain_reply']['NOT_FOUND']) {
-                // Ignore if it's not the last reply
-                if (isLastReply) {
-                    closeResponse()
-                    next(createError(404, `Runtime instance of analyzer "${id}" was not found`))
-                }
-            }
-        }
-    })
-}
-
-function updateAnalyzerConfig(req, res, next) {
-    // TODO: Implement the function
-}
-
-function getAnalyzerSourceConfig(req, res, next) {
-    const id = req.params['id']
-    models['analyzers'].findById(id, getConfSourceProjection, (err, result) => {
-        if (err) {
-            return next(createError(500, null, err))
-        }
-        if (result === null) {
-            return next(createError(404))
-        }
-        res.send(result)
-    })
-}
-
-function updateAnalyzerSourceConfig(req, res, next) {
-    // TODO: Implement the function
-}
-
-function getAnalyzerPipelineConfig(req, res, next) {
-    const id = req.params['id']
-    models['analyzers'].findById(id, getConfSourceProjection, (err, result) => {
-        if (err) {
-            return next(createError(500, null, err))
-        }
-        if (result === null) {
-            return next(createError(404))
-        }
-        res.send(result)
-    })
-}
-
-function updateAnalyzerPipelineConfig(req, res, next) {
-    // TODO: Implement the function
-}
-
-function getAnalyzerRuntime(req, res, next) {
-    const id = req.params['id']
-    const request = JSON.stringify({
-        command: msg['ch_api_brain']['REQ_ANALYZER_STATUS'],
-        params: { id }
-    })
-    requestBrain(request, (reply, isLastReply, closeResponse) => {
-        if (reply['error']) {
-            closeResponse()
-            return next(createError(500, reply['error']['message']))
-        }
-        if (reply['result']) {
-            closeResponse()
-            return res.send(reply['result'])
-        }
-        if (reply['code']) {
-            if (reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: getting runtime status of analyzer "${id}"`)
-                return next(createError(500, null, error))
-            }
-            if (reply['code'] === msg['ch_api_brain_reply']['NOT_FOUND']) {
-                // Ignore if it's not the last reply
-                if (isLastReply) {
-                    closeResponse()
-                    next(createError(404, `Runtime instance of analyzer "${id}" was not found`))
-                }
-            }
-        }
-    })
-}
-
-function createAnalyzerRuntime(req, res, next) {
-    const id = req.params['id']
-    models['analyzers'].findById(id, (err, analyzer) => {
-        if (err) {
-            return next(createError(500, null, err))
-        }
-        if (analyzer === null) {
-            return next(createError(404))
-        }
-
-        if (!analyzer['enabled']) {
-            return next(createError(400, 'Cannot create runtime instance for unenabled analyzer'))
-        }
-
-        const type = analyzer['type']
-        const source = analyzer['source']
-        const pipelines = analyzer['pipelines']
-
-        // Validate request
-        if (!type) {
-            return next(createError(400, 'Analyzer type is required'))
-        }
-        if (!source) {
-            return next(createError(400, 'Analyzer source is required'))
-        }
-        if (!pipelines) {
-            return next(createError(400, 'Analyzer pipeline is required'))
-        }
-
         const request = JSON.stringify({
-            command: msg['ch_api_brain']['START_ANALYZER'],
-            params: { id, type, source, pipelines }
+            command: 'CREATE',
+            params: { id: saved.id, name, source, pipelines }
         })
-        requestBrain(request, (reply, isLastReply, closeResponse) => {
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: creating runtime instance of analyzer "${id}"`)
+                let error = new Error(`Timeout Error: Request: creating analyzer of "${saved.id}"`)
                 return next(createError(500, null, error))
             }
             if (reply['error']) {
                 closeResponse()
                 return next(createError(500, reply['error']['message']))
             }
-            if (reply['result']) {
-                closeResponse()
-                return res.status(201).send(reply['result'])
-            }
+            // TODO: rollback saved record if any error occurred
+            closeResponse()
+            return res.status(201).send({id: saved.id})
         })
     })
 }
 
-function updateAnalyzerRuntime(req, res, next) {
+function deleteAnalyzers(req, res, next) {
     // TODO: Implement the function
 }
 
-function deleteAnalyzerRuntime(req, res, next) {
+function getAnalyzer(req, res, next) {
+    const id = req.params['id']
+    models['analyzers'].findById(id, getConfProjection, (err, analyzer) => {
+        if (err) { return next(createError(500, null, err)) }
+        if (analyzer === null) { return next(createError(404)) }
+        let data = analyzer.toJSON()
+        const request = JSON.stringify({
+            command: 'READ',
+            params: { id: analyzer['_id'] }
+        })
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
+            if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                return next(createError(500, null, error))
+            }
+            if (reply['error']) {
+                closeResponse()
+                return next(createError(500, reply['error']['message']))
+            }
+            // TODO: rollback saved record if any error occurred
+            closeResponse()
+            data.status = reply['result']
+            return res.status(201).send(data)
+        })
+    })
+}
+
+function deleteAnalyzer(req, res, next) {
     const id = req.params['id']
     const request = JSON.stringify({
-        command: msg['ch_api_brain']['STOP_ANALYZER'],
-        params: { id }
+        command: 'DELETE',
+        params: id
     })
-    requestBrain(request, (reply, isLastReply, closeResponse) => {
+    requestBackend(request, (reply, isLastReply, closeResponse) => {
+        if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+            let error = new Error(`Timeout Error: Request: deleting runtime instance of analyzer "${id}"`)
+            return next(createError(500, null, error))
+        }
         if (reply['error']) {
             closeResponse()
             return next(createError(500, reply['error']['message']))
         }
-        if (reply['result']) {
+        closeResponse()
+        models['analyzers'].findByIdAndRemove(id, (err) => {
+            if (err) {
+                return next(createError(500, null, err))
+            }
+            res.status(204).send()
+        })
+    })
+}
+
+function updateAnalyzer(req, res, next) {
+    // TODO: Implement the function
+}
+
+function startAnalyzer(req, res, next) {
+    const id = req.params['id']
+    const request = JSON.stringify({
+        command: 'START',
+        params: id
+    })
+    requestBackend(request, (reply, isLastReply, closeResponse) => {
+        if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+            let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+            return next(createError(500, null, error))
+        }
+        if (reply['error']) {
             closeResponse()
-            return res.status(200).send({ result: { id } })
+            return next(createError(500, reply['error']['message']))
         }
-        if (reply['code']) {
-            if (reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: deleting runtime instance of analyzer "${id}"`)
-                return next(createError(500, null, error))
-            }
-            if (reply['code'] === msg['ch_api_brain_reply']['NOT_FOUND']) {
-                // Ignore if it's not the last reply
-                if (isLastReply) {
-                    closeResponse()
-                    next(createError(404, `Runtime instance of analyzer "${id}" was not found`))
-                }
-            }
+        // TODO: rollback saved record if any error occurred
+        closeResponse()
+        return res.status(204).send()
+    })
+}
+
+function stopAnalyzer(req, res, next) {
+    const id = req.params['id']
+    const request = JSON.stringify({
+        command: 'STOP',
+        params: id
+    })
+    requestBackend(request, (reply, isLastReply, closeResponse) => {
+        if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+            let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+            return next(createError(500, null, error))
         }
+        if (reply['error']) {
+            closeResponse()
+            return next(createError(500, reply['error']['message']))
+        }
+        // TODO: rollback saved record if any error occurred
+        closeResponse()
+        return res.status(204).send()
+    })
+}
+
+function getAnalyzerSource(req, res, next) {
+    const id = req.params['id']
+    models['analyzers'].findById(id, getConfSourceProjection, (err, result) => {
+        if (err) {
+            return next(createError(500, null, err))
+        }
+        if (result === null) {
+            return next(createError(404))
+        }
+        res.send(result)
+    })
+}
+
+function getAnalyzerPipeline(req, res, next) {
+    const id = req.params['id']
+    models['analyzers'].findById(id, getConfSourceProjection, (err, result) => {
+        if (err) {
+            return next(createError(500, null, err))
+        }
+        if (result === null) {
+            return next(createError(404))
+        }
+        res.send(result)
     })
 }
 
 /*
  * Routing Table
  */
-router.get('/analyzers', getAllAnalyzerConfig)
-router.post('/analyzers', postReqValidator,  createAnalyzerConfig)
-router.delete('/analyzers', deleteAllAnalyzers)
+router.get('/analyzers', getAnalyzers)
+router.post('/analyzers', postReqValidator,  createAnalyzer)
+router.delete('/analyzers', deleteAnalyzers)
 
-router.get('/analyzer/:id', getAnalyzerConfig)
-router.patch('/analyzer/:id', updateAnalyzerConfig)
+router.get('/analyzer/:id', getAnalyzer)
+router.patch('/analyzer/:id', updateAnalyzer)
 router.delete('/analyzer/:id', deleteAnalyzer)
-router.get('/analyzer/:id/source', getAnalyzerSourceConfig)
-router.patch('/analyzer/:id/source', updateAnalyzerSourceConfig)
-router.get('/analyzer/:id/pipelines', getAnalyzerPipelineConfig)
-router.patch('/analyzer/:id/pipelines', updateAnalyzerPipelineConfig)
-router.get('/analyzer/:id/runtime', getAnalyzerRuntime)
-router.post('/analyzer/:id/runtime', createAnalyzerRuntime)
-router.patch('/analyzer/:id/runtime', updateAnalyzerRuntime)
-router.delete('/analyzer/:id/runtime', deleteAnalyzerRuntime)
+router.get('/analyzer/:id/source', getAnalyzerSource)
+router.get('/analyzer/:id/pipelines', getAnalyzerPipeline)
+router.post('/analyzer/:id/start', startAnalyzer)
+router.post('/analyzer/:id/stop', stopAnalyzer)
 
 module.exports = router
