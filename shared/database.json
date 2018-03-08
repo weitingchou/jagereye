@@ -4,7 +4,7 @@
         "mode": {
             "type": "String",
             "required": true,
-            "enum": [ "file", "stream" ]
+            "enum": [ "file", "streaming" ]
         },
         "url": {
             "type": "String",
@@ -13,9 +13,10 @@
     },
     "subdoc_pipelines": {
         "_id": { "auto": false },
-        "name": {
+        "type": {
             "type": "String",
-            "required": true
+            "required": true,
+            "enum": [ "IntrusionDetection" ]
         },
         "params": {
             "type": "Object",
@@ -27,14 +28,6 @@
             "type": "String",
             "required": true,
             "unique": true
-        },
-        "type": {
-            "type": "String",
-            "enum": [ "tripwire" ]
-        },
-        "enabled": {
-            "type": "Boolean",
-            "default": false
         },
         "source": "SUBDOC_SOURCE",
         "pipelines": [ "SUBDOC_PIPELINES" ]

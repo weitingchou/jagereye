@@ -30,7 +30,7 @@ app.use((err, req, res, next) => {
         code: err.code,
         message: err.message
     }
-    res.status(err.status).send(error)
+    res.status(err.status).send({error: error})
 })
 
 module.exports = app
