@@ -120,6 +120,10 @@ class EventAgent {
         // Find all matched base events and group them by application names.
         const eventGroups = await this.baseModel.model.aggregate(aggregations);
 
+        if (eventGroups.length === 0) {
+            return;
+        }
+
         // Handle for each application group.
         await forEachAsync(eventGroups, async (eventGroup) => {
             // Find the model belongs to the application.
@@ -171,14 +175,14 @@ class EventAgent {
             concat(result, value.eventIds)
         ), []);
 
-        // Delete all events.
-        await this.baseModel.model.remove({
-            _id: {
-                $in: allEventIds,
-            },
-        });
-
         if (allEventIds.length > 0) {
+            // Delete all events.
+            await this.baseModel.model.remove({
+                _id: {
+                    $in: allEventIds,
+                },
+            });
+
             console.log(`Delete ${allEventIds.length} event records: ${allEventIds}`);
         }
     }
