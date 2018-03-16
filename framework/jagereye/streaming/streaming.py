@@ -18,10 +18,10 @@ DEFAULT_STREAM_BUFFER_SIZE = 64     # frames
 DEFAULT_FPS = 15
 RETCODE = {
     "SUCCESS": 0,
-    "IN_USE": 3,
-    "CONNECTION_BROKEN": 2,
-    "FAILED_TO_OPEN": 4,
-    "EOF": 5
+    "ALREADY_OPENED": 1,
+    "FAILED_TO_OPEN": 2,
+    "CONNECTION_BROKEN": 3,
+    "EOF": 4
 }
 
 
@@ -34,6 +34,10 @@ def _is_live_stream(url):
         boolean
     """
     return urlparse(url).scheme.lower() == "rtsp"
+
+
+class StreamNotOpenError(Exception):
+    pass
 
 
 class ConnectionBrokenError(Exception):
@@ -102,42 +106,19 @@ class VideoStreamReader(object):
     """
 
     def __init__(self, buffer_size=DEFAULT_STREAM_BUFFER_SIZE):
-        """Create a new `VideoStreamReader`.
+        """Initialize a `VideoStreamReader` object.
 
         Args:
-          src(string): The video source. It can be a video file name, or live
+          src (str): The video source. It can be a video file name, or live
             stream URL such as RTSP, Motion JPEG.
         """
         self._reader = cv2.VideoCapture()
         self._queue = deque(maxlen=DEFAULT_STREAM_BUFFER_SIZE)
         self._stop_event = threading.Event()
+        self._current_source = None
         self._thread = None
-        self._is_opened = False
         self._is_live_stream = False
-        self._source = None
         self._capture_interval = None
-        self._metadata = None
-
-    def open(self, src, fps=DEFAULT_FPS):
-        if self._is_opened:
-            return RETCODE["IN_USE"]
-
-        if not self._reader.open(src):
-            logging.error("Can't open video stream '{}'".format(src))
-            return RETCODE["FAILED_TO_OPEN"]
-
-        # Set metadata
-        success, image = self._reader.read()
-        if not success:
-            logging.error("Failed to read video data for '{}'".format(src))
-            return RETCODE["FAILED_TO_OPEN"]
-        height, width, _ = image.shape
-        self._metadata = {"height": height, "width": width}
-
-        self._source = src
-        self._is_live_stream = _is_live_stream(self._source)
-        self._capture_interval = 1000.0 / fps
-        return RETCODE["SUCCESS"]
 
     def _start_reader_thread(self):
         logging.info("Starting reader thread")
@@ -150,19 +131,28 @@ class VideoStreamReader(object):
                                           self._is_live_stream)
         self._thread.daemon = True
         self._thread.start()
-        self._is_opened = True
+
+    def open(self, src, fps=DEFAULT_FPS):
+        if self._current_source is not None:
+            return RETCODE["ALREADY_OPENED"]
+
+        if not self._reader.open(src):
+            logging.error("Can't open video stream '{}'".format(src))
+            return RETCODE["FAILED_TO_OPEN"]
+
+        self._stop_event.clear()
+        self._is_live_stream = _is_live_stream(src)
+        self._capture_interval = 1000.0 / fps
+        self._current_source = src
+        self._start_reader_thread()
+        return RETCODE["SUCCESS"]
 
     def release(self):
-        if self._thread:
-            self._stop_event.set()
+        self._stop_event.set()
         self._thread = None
         self._reader.release()
         self._queue.clear()
-        self._stop_event.clear()
-        self._is_opened = False
-
-    def get_metadata(self):
-        return self._metadata
+        self._current_source = None
 
     def _read_all(self):
         return [self._queue.pop() for _ in range(len(self._queue))]
@@ -180,36 +170,30 @@ class VideoStreamReader(object):
           RuntimeError: If the stream is live and disconnected temporarily.
           ValueError: If the stream ends.
         """
-        try:
-            if not self._is_opened:
-                self._start_reader_thread()
-        except RuntimeError:
-            return RETCODE["FAILED_TO_OPEN"], []
-        else:
-            retcode = RETCODE["SUCCESS"]
-            data = []
+        retcode = RETCODE["SUCCESS"]
+        data = []
+        cur_q_size = len(self._queue)
+        while cur_q_size < batch_size:
+            if self._thread.get_exception() is not None:
+                break
+            time.sleep(0.1)
             cur_q_size = len(self._queue)
-            while cur_q_size < batch_size:
-                if self._thread.get_exception() is not None:
-                    break
-                time.sleep(0.1)
-                cur_q_size = len(self._queue)
 
-            exception = self._thread.get_exception()
-            if isinstance(exception, EndOfVideoError):
+        exception = self._thread.get_exception()
+        if isinstance(exception, EndOfVideoError):
+            if cur_q_size <= batch_size:
+                data = self._read_all()
                 retcode = RETCODE["EOF"]
-                if cur_q_size < batch_size:
-                    data = self._read_all()
-                else:
-                    data = self._read(batch_size)
-            elif isinstance(exception, ConnectionBrokenError):
-                retcode = RETCODE["CONNECTION_BROKEN"]
             else:
-                # XXX: In this case we are assuming that everything is fine,
-                #      and current queue size should creater than the batch
-                #      size.
                 data = self._read(batch_size)
-            return retcode, data
+        elif isinstance(exception, ConnectionBrokenError):
+            retcode = RETCODE["CONNECTION_BROKEN"]
+        else:
+            # XXX: In this case we are assuming that everything is fine,
+            #      and current queue size should creater than the batch
+            #      size.
+            data = self._read(batch_size)
+        return retcode, data
 
 
 @ray.remote
@@ -219,7 +203,7 @@ class VideoStreamWriter(object):
 
     def open(self, path, video_format, fps, size):
         if self._writer.isOpened():
-            return RETCODE["IN_USE"]
+            return RETCODE["ALREADY_OPENED"]
         filename = "{}.{}".format(path, video_format)
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         if not self._writer.open(filename, fourcc, fps, size):

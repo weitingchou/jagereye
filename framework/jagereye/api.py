@@ -66,16 +66,16 @@ class APIConnector(object):
                 result = self.on_read(msg["params"])
                 response["result"] = result
             elif msg["command"] == "UPDATE":
-                self.on_update(msg["params"])
-                response["result"] = "success"
+                result = self.on_update(msg["params"])
+                response["result"] = result
             elif msg["command"] == "DELETE":
-                self.on_delete()
+                self.on_delete(msg["params"])
             elif msg["command"] == "START":
                 self.on_start(msg["params"])
             elif msg["command"] == "STOP":
                 self.on_stop(msg["params"])
         except RuntimeError as e:
-            response["error"] = e
+            response["error"] = {"message": str(e)}
         except Exception as e:
             logging.error(e)
 

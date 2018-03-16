@@ -9,7 +9,7 @@ const router = express.Router()
 const msg = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'))
 const MAX_ANALYZERS = 16
 const NUM_OF_BRAINS = 1
-const DEFAULT_REQUEST_TIMEOUT = 3000
+const DEFAULT_REQUEST_TIMEOUT = 15000
 
 /*
  * Projections
@@ -142,7 +142,7 @@ function getAnalyzers(req, res, next) {
             closeResponse()
             result = list.map(x => {
                 data = x.toJSON()
-                data['status'] = reply['result'][x['_id']]
+                data.status = reply['result'][x['_id']]
                 return data
             })
             return res.status(200).send(result)
@@ -204,13 +204,13 @@ function deleteAnalyzers(req, res, next) {
 
 function getAnalyzer(req, res, next) {
     const id = req.params['id']
-    models['analyzers'].findById(id, getConfProjection, (err, analyzer) => {
+    models['analyzers'].findById(id, getConfProjection, (err, result) => {
         if (err) { return next(createError(500, null, err)) }
-        if (analyzer === null) { return next(createError(404)) }
-        let data = analyzer.toJSON()
+        if (result === null) { return next(createError(404)) }
+        let data = result.toJSON()
         const request = JSON.stringify({
             command: 'READ',
-            params: { id: analyzer['_id'] }
+            params: id
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
@@ -231,72 +231,138 @@ function getAnalyzer(req, res, next) {
 
 function deleteAnalyzer(req, res, next) {
     const id = req.params['id']
-    const request = JSON.stringify({
-        command: 'DELETE',
-        params: id
-    })
-    requestBackend(request, (reply, isLastReply, closeResponse) => {
-        if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-            let error = new Error(`Timeout Error: Request: deleting runtime instance of analyzer "${id}"`)
-            return next(createError(500, null, error))
+    models['analyzers'].findById(id, (err, result) => {
+        if (err) {
+            return next(createError(500, null, err))
         }
-        if (reply['error']) {
-            closeResponse()
-            return next(createError(500, reply['error']['message']))
+        if (result === null) {
+            return next(createError(404))
         }
-        closeResponse()
-        models['analyzers'].findByIdAndRemove(id, (err) => {
-            if (err) {
-                return next(createError(500, null, err))
+        const request = JSON.stringify({
+            command: 'DELETE',
+            params: id
+        })
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
+            if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+                let error = new Error(`Timeout Error: Request: deleting runtime instance of analyzer "${id}"`)
+                return next(createError(500, null, error))
             }
-            res.status(204).send()
+            if (reply['error']) {
+                closeResponse()
+                return next(createError(500, reply['error']['message']))
+            }
+            closeResponse()
+            models['analyzers'].findByIdAndRemove(id, (err) => {
+                if (err) {
+                    return next(createError(500, null, err))
+                }
+                res.status(204).send()
+            })
         })
     })
 }
 
 function updateAnalyzer(req, res, next) {
     // TODO: Implement the function
+    const id = req.params['id']
+    const update = {}
+    if (req.body.hasOwnProperty('name')) {
+        update['name'] = req.body['name']
+    }
+    if (req.body.hasOwnProperty('source')) {
+        update['source'] = req.body['source']
+    }
+    if (req.body.hasOwnProperty('pipelines')) {
+        update['pipelines'] = req.body['pipelines']
+    }
+    const options = {
+        new: true,
+        runValidators: true
+    }
+    models['analyzers'].findByIdAndUpdate(id, update, options, (err, result) => {
+        if (err) {
+            return next(createError(500, null, err))
+        }
+        if (result === null) {
+            return next(createError(404))
+        }
+        const request = JSON.stringify({
+            command: 'UPDATE',
+            params: { id, params: update }
+        })
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
+            if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                return next(createError(500, null, error))
+            }
+            if (reply['error']) {
+                closeResponse()
+                return next(createError(500, reply['error']['message']))
+            }
+            // TODO: rollback saved record if any error occurred
+            closeResponse()
+            data = result.toJSON()
+            data.status = reply['result']
+            return res.status(200).send(data)
+        })
+    })
 }
 
 function startAnalyzer(req, res, next) {
     const id = req.params['id']
-    const request = JSON.stringify({
-        command: 'START',
-        params: id
-    })
-    requestBackend(request, (reply, isLastReply, closeResponse) => {
-        if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-            let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
-            return next(createError(500, null, error))
+    models['analyzers'].findById(id, (err, result) => {
+        if (err) {
+            return next(createError(500, null, err))
         }
-        if (reply['error']) {
+        if (result === null) {
+            return next(createError(404))
+        }
+        const request = JSON.stringify({
+            command: 'START',
+            params: id
+        })
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
+            if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                return next(createError(500, null, error))
+            }
+            if (reply['error']) {
+                closeResponse()
+                return next(createError(500, reply['error']['message']))
+            }
+            // TODO: rollback saved record if any error occurred
             closeResponse()
-            return next(createError(500, reply['error']['message']))
-        }
-        // TODO: rollback saved record if any error occurred
-        closeResponse()
-        return res.status(204).send()
+            return res.status(204).send()
+        })
     })
 }
 
 function stopAnalyzer(req, res, next) {
     const id = req.params['id']
-    const request = JSON.stringify({
-        command: 'STOP',
-        params: id
-    })
-    requestBackend(request, (reply, isLastReply, closeResponse) => {
-        if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-            let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
-            return next(createError(500, null, error))
+    models['analyzers'].findById(id, (err, result) => {
+        if (err) {
+            return next(createError(500, null, err))
         }
-        if (reply['error']) {
+        if (result === null) {
+            return next(createError(404))
+        }
+        const request = JSON.stringify({
+            command: 'STOP',
+            params: id
+        })
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
+            if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                return next(createError(500, null, error))
+            }
+            if (reply['error']) {
+                closeResponse()
+                return next(createError(500, reply['error']['message']))
+            }
+            // TODO: rollback saved record if any error occurred
             closeResponse()
-            return next(createError(500, reply['error']['message']))
-        }
-        // TODO: rollback saved record if any error occurred
-        closeResponse()
-        return res.status(204).send()
+            return res.status(204).send()
+        })
     })
 }
 
