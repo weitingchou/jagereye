@@ -127,11 +127,11 @@ function getAnalyzers(req, res, next) {
         if (list.length === 0) { return res.status(200).send([]) }
         const request = JSON.stringify({
             command: 'READ',
-            params: { id: list.map(x => x['_id']) }
+            params: list.map(x => x['_id'])
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                let error = new Error('Timeout Error: Request: getting analyzers')
                 return next(createError(500, null, error))
             }
             if (reply['error']) {
@@ -184,7 +184,7 @@ function createAnalyzer(req, res, next) {
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: creating analyzer of "${saved.id}"`)
+                let error = new Error(`Timeout Error: Request: creating analyzer "${saved.id}"`)
                 return next(createError(500, null, error))
             }
             if (reply['error']) {
@@ -214,7 +214,7 @@ function getAnalyzer(req, res, next) {
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                let error = new Error(`Timeout Error: Request: getting analyzer "${id}"`)
                 return next(createError(500, null, error))
             }
             if (reply['error']) {
@@ -244,7 +244,7 @@ function deleteAnalyzer(req, res, next) {
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: deleting runtime instance of analyzer "${id}"`)
+                let error = new Error(`Timeout Error: Request: deleting analyzer "${id}"`)
                 return next(createError(500, null, error))
             }
             if (reply['error']) {
@@ -292,7 +292,7 @@ function updateAnalyzer(req, res, next) {
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                let error = new Error(`Timeout Error: Request: updating analyzer "${id}"`)
                 return next(createError(500, null, error))
             }
             if (reply['error']) {
@@ -323,7 +323,7 @@ function startAnalyzer(req, res, next) {
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                let error = new Error(`Timeout Error: Request: starting analyzer "${id}"`)
                 return next(createError(500, null, error))
             }
             if (reply['error']) {
@@ -352,7 +352,7 @@ function stopAnalyzer(req, res, next) {
         })
         requestBackend(request, (reply, isLastReply, closeResponse) => {
             if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
-                let error = new Error(`Timeout Error: Request: creating analyzer of "${id}"`)
+                let error = new Error(`Timeout Error: Request: stopping analyzer "${id}"`)
                 return next(createError(500, null, error))
             }
             if (reply['error']) {

@@ -215,10 +215,10 @@ class AnalyzerManager(APIConnector):
     def on_read(self, params):
         logging.info("Getting Analyzer information, params: {}".format(params))
 
-        result = None
         if isinstance(params, list):
+            result = dict()
             for sid in params:
-                result = {sid: self._get_worker_status(sid)}
+                result[sid] = self._get_worker_status(sid)
         else:
             # TODO: check if params is an ObjectID
             result = self._get_worker_status(params)
@@ -266,7 +266,7 @@ class AnalyzerManager(APIConnector):
             return self._get_worker_status(sid)
 
     def _delete_analyzer(self, sid):
-        ray.wait([self._analyzers[sid]["worker"].release.remote()])
+        ray.wait([self._analyzers[sid]["worker"].stop.remote()])
         del self._analyzers[sid]
 
     def on_delete(self, params):
