@@ -45,6 +45,7 @@ COPY . ./jagereye/services/expiration
 # [NOTE] Shared files should be copied in to the build context before
 #        running docker build
 COPY event.json ./jagereye/shared
+COPY config.yml ./jagereye/shared
 
 WORKDIR ${HOME}/jagereye/services/expiration
 
