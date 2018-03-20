@@ -27,23 +27,24 @@ describe('Analyzer Operations: ', () => {
     let videoApp = null;
     let testStartTime = (new Date().getTime() / 1000)
 
-    beforeAll(() => {
+    beforeAll(async () => {
       videoApp = new video.videoApp(videoAppPort);
       videoApp.start();
 
       redisCli = new redisAsync.client();
 
-      return MongoClient.connect('mongodb://localhost:27017/jager_test')
-        .then((db) => {
-          mongoCli = db;
-          return db.dropDatabase();
-        });
+      mongoConn = await MongoClient.connect('mongodb://localhost:27017');
+      const mongoDB = mongoConn.db('jager_test');
+      const coll = mongoDB.collection('analyzers');
+      mongoCli = mongoConn;
+      await coll.remove({});
+      mongoConn.close();
+      return;
     });
 
     afterAll(() => {
       videoApp.stop();
       redisCli.quit();
-      mongoCli.close();
     });
 
     test('create an analyzer', async (done) => {
@@ -167,9 +168,16 @@ describe('Analyzer Operations: ', () => {
           let notifiedInfo = data[0];
           expect(notifiedInfo).toHaveProperty('timestamp');
           expect(notifiedInfo).toHaveProperty('analyzerId');
+          expect(notifiedInfo.analyzerId).toEqual(analyzerId);
           expect(notifiedInfo).toHaveProperty('type');
+          expect(notifiedInfo.type).toEqual('tripwire_alert');
           expect(notifiedInfo).toHaveProperty('appName');
+          expect(notifiedInfo.appName).toEqual(type);
           expect(notifiedInfo).toHaveProperty('content');
+          expect(notifiedInfo.content).toHaveProperty('triggered');
+          expect(notifiedInfo.content.triggered).toContain('person');
+          expect(notifiedInfo.content).toHaveProperty('thumbnail_name');
+          expect(notifiedInfo.content).toHaveProperty('video_name');
           expect(notifiedInfo).toHaveProperty('date');
         } catch (err) {
           expect(err).toBeNull();

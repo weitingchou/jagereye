@@ -42,6 +42,20 @@ services:
         environment:
             - JAGERENV="{{environ.JAGERENV}}"
             - SHARED_ROOT={{environ.SHARED_ROOT}}
+    expiration:
+        {%- if build %}
+        build: "{{services.expiration.buildpath}}"
+        {%- endif %}
+        image: "jagereye/expiration:{{services.expiration.version}}"
+        network_mode: "{{services.expiration.network_mode}}"
+        volumes:
+            {%- for _, volume in services.expiration.volumes.items() %}
+            - "{{volume}}"
+            {%- endfor %}
+        depends_on:
+            - database
+        environment:
+            - JAGERENV="{{environ.JAGERENV}}"
     database:
         {%- if build %}
         build: "{{services.database.buildpath}}"
