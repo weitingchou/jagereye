@@ -43,7 +43,8 @@ class VideoStreamCapturer(ICapturer):
         Args:
           src (string): The video source. It can be a video file name, or live
             stream URL such as RTSP, Motion JPEG.
-          retry_timeout (int): The limit of retry timeout. Defaults to 30.
+          retry_timeout (int): The limit of retry timeout (in seconds). Defaults
+            to 30.
         """
         self._src = src
         self._retry_timeout = retry_timeout
@@ -68,7 +69,7 @@ class VideoStreamCapturer(ICapturer):
           RuntimeError: If the video stream is not opened.
         """
         self._cap = cv2.VideoCapture()
-        self._cap.open(self._src)
+        exec_timeout(self._retry_timeout, self._cap.open, self._src)
 
         if not self._cap.isOpened():
             raise RuntimeError(
