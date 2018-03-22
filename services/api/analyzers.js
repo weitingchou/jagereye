@@ -7,7 +7,7 @@ const fs = require('fs')
 const router = express.Router()
 
 const msg = JSON.parse(fs.readFileSync('../../shared/messaging.json', 'utf8'))
-const MAX_ANALYZERS = 16
+const MAX_ANALYZERS = 8
 const NUM_OF_BRAINS = 1
 const DEFAULT_REQUEST_TIMEOUT = 15000
 
@@ -199,7 +199,41 @@ function createAnalyzer(req, res, next) {
 }
 
 function deleteAnalyzers(req, res, next) {
-    // TODO: Implement the function
+    models['analyzers'].find({}, (err, list) => {
+        if (err) { return next(createError(500, null, err)) }
+        if (list.length === 0) { return res.status(204).send() }
+        list = list.map(x => x['_id'])
+        const request = JSON.stringify({
+            command: 'DELETE',
+            params: list
+        })
+        requestBackend(request, (reply, isLastReply, closeResponse) => {
+            if (reply['code'] && reply['code'] === NATS.REQ_TIMEOUT) {
+                let error = new Error('Timeout Error: Request: deleting analyzers')
+                return next(createError(500, null, error))
+            }
+            if (reply['error']) {
+                closeResponse()
+                return next(createError(500, reply['error']['message']))
+            }
+            closeResponse()
+            models['analyzers'].remove({_id: {$in: list}}, (err) => {
+                if (err) { return next(createError(500, null, err)) }
+                res.status(204).send()
+            })
+        })
+    })
+}
+
+function getSettings(req, res, next) {
+    mondels['analyzers'].count({}, (err, count) => {
+        if (err) { return next(createError(500, null, err)) }
+        result = {
+            maxAnalyzerCount: MAX_ANALYZERS,
+            currentAnalyzerCount: count
+        }
+        res.status(200).send(result)
+    })
 }
 
 function getAnalyzer(req, res, next) {
@@ -398,6 +432,8 @@ function getAnalyzerPipeline(req, res, next) {
 router.get('/analyzers', getAnalyzers)
 router.post('/analyzers', postReqValidator,  createAnalyzer)
 router.delete('/analyzers', deleteAnalyzers)
+
+router.get('/analyzers/settings', getSettings)
 
 router.get('/analyzer/:id', getAnalyzer)
 router.patch('/analyzer/:id', updateAnalyzer)
