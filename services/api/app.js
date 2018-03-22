@@ -3,6 +3,7 @@ const bodyParser = require('body-parser')
 const expressValidator = require('express-validator')
 const cors = require('cors')
 
+const users = require('./users')
 const analyzers = require('./analyzers')
 const events = require('./events')
 
@@ -15,6 +16,7 @@ app.use(expressValidator())
 
 // Initialize API
 const API_ENTRY='/api/v1'
+app.use(API_ENTRY, users)
 app.use(API_ENTRY, analyzers)
 app.use(API_ENTRY, events)
 
