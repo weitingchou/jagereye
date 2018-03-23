@@ -193,7 +193,7 @@ function createAnalyzer(req, res, next) {
             }
             // TODO: rollback saved record if any error occurred
             closeResponse()
-            return res.status(201).send({id: saved.id})
+            return res.status(201).send({_id: saved.id})
         })
     })
 }
@@ -226,7 +226,7 @@ function deleteAnalyzers(req, res, next) {
 }
 
 function getSettings(req, res, next) {
-    mondels['analyzers'].count({}, (err, count) => {
+    models['analyzers'].count({}, (err, count) => {
         if (err) { return next(createError(500, null, err)) }
         result = {
             maxAnalyzerCount: MAX_ANALYZERS,
