@@ -2,8 +2,9 @@ const express = require('express')
 const { checkSchema, validationResult } = require('express-validator/check')
 
 const models = require('./database')
-const { jwt, jwtOptions } = require('./passport')
 const { createError } = require('./common')
+const { jwt, jwtOptions } = require('./passport')
+const { routesWithAuth } = require('./auth')
 const { ROLES } = require('./constants')
 
 const router = express.Router()
@@ -58,7 +59,7 @@ function createUser(req, res, next) {
             return next(createError(500, null, err))
         }
 
-        return res.status(201).send({id: result.id})
+        return res.status(201).send({ id: result.id })
     })
 }
 
@@ -91,7 +92,13 @@ function login(req, res, next) {
     })
 }
 
-router.post('/users', userValidator, createUserValidator, createUser)
+/*
+ * Routing Table
+ */
+routesWithAuth(
+    router,
+    ['post', '/users', userValidator, createUserValidator, createUser],
+)
 router.post('/login', userValidator, login)
 
 module.exports = router

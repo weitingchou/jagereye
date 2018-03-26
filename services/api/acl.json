@@ -1,0 +1,26 @@
+[{
+    "group": "admin",
+    "permissions": [{
+        "resource": "*",
+        "methods": "*",
+        "action": "allow"
+    }]
+}, {
+    "group": "writer",
+    "permissions": [{
+        "resource": "users",
+        "methods": [
+            "POST"
+        ],
+        "action": "deny"
+    }]
+}, {
+    "group": "reader",
+    "permissions": [{
+        "resource": "users",
+        "methods": [
+            "POST"
+        ],
+        "action": "deny"
+    }]
+}]
