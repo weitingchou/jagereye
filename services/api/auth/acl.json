@@ -10,9 +10,16 @@
     "permissions": [{
         "resource": "users",
         "methods": [
+            "GET",
             "POST"
         ],
         "action": "deny"
+    }, {
+        "resource": "user",
+        "methods": [
+            "GET"
+        ],
+        "action": "allow"
     }, {
         "resource": "analyzers",
         "methods": [
@@ -42,9 +49,16 @@
     "permissions": [{
         "resource": "users",
         "methods": [
+            "GET",
             "POST"
         ],
         "action": "deny"
+    }, {
+        "resource": "user",
+        "methods": [
+            "GET"
+        ],
+        "action": "allow"
     }, {
         "resource": "analyzers",
         "methods": [

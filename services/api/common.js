@@ -22,6 +22,11 @@ function createError(status, message, origErrObj) {
     return error
 }
 
+function isValidId(id) {
+    return id.match(/^[0-9a-fA-F]{24}$/)
+}
+
 module.exports = {
     createError,
+    isValidId,
 }
