@@ -3,7 +3,7 @@ const { checkSchema, validationResult } = require('express-validator/check')
 
 const models = require('./database')
 const { createError } = require('./common')
-const { jwt, jwtOptions } = require('./passport')
+const { jwt, jwtOptions } = require('./auth/passport')
 const { routesWithAuth } = require('./auth')
 const { ROLES } = require('./constants')
 

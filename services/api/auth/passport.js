@@ -3,8 +3,8 @@ const jwt = require('jsonwebtoken')
 const passport = require('passport')
 const passportJWT = require("passport-jwt")
 
-const models = require('./database')
-const { createError } = require('./common')
+const models = require('../database')
+const { createError } = require('../common')
 
 const router = express.Router()
 
