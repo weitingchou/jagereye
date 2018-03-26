@@ -33,7 +33,7 @@ const createUserValidator = checkSchema({
     }
 })
 
-function createUser(req, res, next) {
+async function createUser(req, res, next) {
     const errors = validationResult(req)
 
     if (!errors.isEmpty()) {
@@ -42,28 +42,28 @@ function createUser(req, res, next) {
 
     const { username, password, role } = req.body
 
-    models.users.create({
-        username,
-        password,
-        role,
-    }, (err, result) => {
-        if (err) {
-            if (err.name === 'MongoError') {
-                if (err.code === 11000) {
-                    const dupKey = err.errmsg.slice(err.errmsg.lastIndexOf('dup key:') + 14, -3)
-
-                    return next(createError(400, `Username exists: ${dupKey}`))
-                }
-            }
-
-            return next(createError(500, null, err))
-        }
+    try {
+        const result = await models.users.create({
+            username,
+            password,
+            role,
+        })
 
         return res.status(201).send({ id: result.id })
-    })
+    } catch (err) {
+        if (err.name === 'MongoError') {
+            if (err.code === 11000) {
+                const dupKey = err.errmsg.slice(err.errmsg.lastIndexOf('dup key:') + 14, -3)
+
+                return next(createError(400, `Username exists: ${dupKey}`))
+            }
+        }
+
+        return next(createError(500, null, err))
+    }
 }
 
-function login(req, res, next) {
+async function login(req, res, next) {
     const errors = validationResult(req)
 
     if (!errors.isEmpty()) {
@@ -72,13 +72,11 @@ function login(req, res, next) {
 
     const { username, password, role } = req.body
 
-    models.users.findOne({
-        username,
-        password,
-    }, (err, result) => {
-        if (err) {
-            return next(createError(500, null, err))
-        }
+    try {
+        const result = await models.users.findOne({
+            username,
+            password,
+        })
 
         if (!result) {
             return next(createError(401, 'Incorrect username or password'))
@@ -89,7 +87,9 @@ function login(req, res, next) {
         const token = jwt.sign(payload, jwtOptions.secretOrKey)
 
         return res.status(200).send({ id, token })
-    })
+    } catch (err) {
+        return next(createError(500, null, err))
+    }
 }
 
 /*
