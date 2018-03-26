@@ -1,8 +1,8 @@
 const express = require('express')
-const { checkSchema, validationResult } = require('express-validator/check')
+const { checkSchema } = require('express-validator/check')
 
 const models = require('./database')
-const { createError, isValidId } = require('./common')
+const { createError, validate, isValidId } = require('./common')
 const { jwt, jwtOptions } = require('./auth/passport')
 const { routesWithAuth } = require('./auth')
 const { ROLES } = require('./constants')
@@ -17,10 +17,6 @@ const getUserProjection = {
 }
 
 const router = express.Router()
-
-function createValidationError(errors) {
-    return createError(400, errors.array()[0]['msg'])
-}
 
 const userValidator = checkSchema({
     username: {
@@ -53,12 +49,6 @@ async function getAllUsers(req, res, next) {
 }
 
 async function createUser(req, res, next) {
-    const errors = validationResult(req)
-
-    if (!errors.isEmpty()) {
-        return next(createValidationError(errors))
-    }
-
     const { username, password, role } = req.body
 
     try {
@@ -110,12 +100,6 @@ async function getUser(req, res, next) {
 }
 
 async function login(req, res, next) {
-    const errors = validationResult(req)
-
-    if (!errors.isEmpty()) {
-        return next(createValidationError(errors))
-    }
-
     const { username, password, role } = req.body
 
     try {
@@ -144,12 +128,12 @@ async function login(req, res, next) {
 routesWithAuth(
     router,
     ['get', '/users', getAllUsers],
-    ['post', '/users', userValidator, createUserValidator, createUser],
+    ['post', '/users', userValidator, createUserValidator, validate, createUser],
 )
 routesWithAuth(
     router,
     ['get', '/user/:id', getUser],
 )
-router.post('/login', userValidator, login)
+router.post('/login', userValidator, validate, login)
 
 module.exports = router
