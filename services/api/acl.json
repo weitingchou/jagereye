@@ -13,6 +13,29 @@
             "POST"
         ],
         "action": "deny"
+    }, {
+        "resource": "analyzers",
+        "methods": [
+            "GET",
+            "POST",
+            "DELETE"
+        ],
+        "action": "allow"
+    }, {
+        "resource": "analyzer",
+        "methods": [
+            "GET",
+            "POST",
+            "PATCH",
+            "DELETE"
+        ],
+        "action": "allow"
+    }, {
+        "resource": "events",
+        "methods": [
+            "POST"
+        ],
+        "action": "allow"
     }]
 }, {
     "group": "reader",
@@ -22,5 +45,23 @@
             "POST"
         ],
         "action": "deny"
+    }, {
+        "resource": "analyzers",
+        "methods": [
+            "GET"
+        ],
+        "action": "allow"
+    }, {
+        "resource": "analyzer",
+        "methods": [
+            "GET"
+        ],
+        "action": "allow"
+    }, {
+        "resource": "events",
+        "methods": [
+            "POST"
+        ],
+        "action": "allow"
     }]
 }]

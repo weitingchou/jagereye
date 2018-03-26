@@ -2,6 +2,7 @@ const express = require('express')
 const { body, validationResult } = require('express-validator/check')
 const httpError = require('http-errors')
 const models = require('./database')
+const { routesWithAuth } = require('./auth')
 const NATS = require('nats')
 const fs = require('fs')
 const router = express.Router()
@@ -377,20 +378,25 @@ function deleteAnalyzerRuntime(req, res, next) {
 /*
  * Routing Table
  */
-router.get('/analyzers', getAllAnalyzerConfig)
-router.post('/analyzers', postReqValidator,  createAnalyzerConfig)
-router.delete('/analyzers', deleteAllAnalyzers)
-
-router.get('/analyzer/:id', getAnalyzerConfig)
-router.patch('/analyzer/:id', updateAnalyzerConfig)
-router.delete('/analyzer/:id', deleteAnalyzer)
-router.get('/analyzer/:id/source', getAnalyzerSourceConfig)
-router.patch('/analyzer/:id/source', updateAnalyzerSourceConfig)
-router.get('/analyzer/:id/pipelines', getAnalyzerPipelineConfig)
-router.patch('/analyzer/:id/pipelines', updateAnalyzerPipelineConfig)
-router.get('/analyzer/:id/runtime', getAnalyzerRuntime)
-router.post('/analyzer/:id/runtime', createAnalyzerRuntime)
-router.patch('/analyzer/:id/runtime', updateAnalyzerRuntime)
-router.delete('/analyzer/:id/runtime', deleteAnalyzerRuntime)
+routesWithAuth(
+    router,
+    ['get', '/analyzers', getAllAnalyzerConfig],
+    ['post', '/analyzers', postReqValidator, createAnalyzerConfig],
+    ['delete', '/analyzers', deleteAllAnalyzers],
+)
+routesWithAuth(
+    router,
+    ['get', '/analyzer/:id', getAnalyzerConfig],
+    ['patch', '/analyzer/:id', updateAnalyzerConfig],
+    ['delete', '/analyzer/:id', deleteAnalyzer],
+    ['get', '/analyzer/:id/source', getAnalyzerSourceConfig],
+    ['patch', '/analyzer/:id/source', updateAnalyzerSourceConfig],
+    ['get', '/analyzer/:id/pipelines', getAnalyzerPipelineConfig],
+    ['patch', '/analyzer/:id/pipelines', updateAnalyzerPipelineConfig],
+    ['get', '/analyzer/:id/runtime', getAnalyzerRuntime],
+    ['post', '/analyzer/:id/runtime', createAnalyzerRuntime],
+    ['patch', '/analyzer/:id/runtime', updateAnalyzerRuntime],
+    ['delete', '/analyzer/:id/runtime', deleteAnalyzerRuntime],
+)
 
 module.exports = router
