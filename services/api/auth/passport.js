@@ -5,11 +5,9 @@ const passportJWT = require("passport-jwt")
 
 const models = require('../database')
 const { createError } = require('../common')
+const config = require('../config')
 
 const router = express.Router()
-
-// TODO(JiaKuan Su): Load secret from config file.
-const JWT_SECRET = 'jagereye'
 
 /*
  * Projections
@@ -21,7 +19,7 @@ const getUserProjection = {
 
 const jwtOptions = {
     jwtFromRequest: passportJWT.ExtractJwt.fromAuthHeaderAsBearerToken(),
-    secretOrKey: JWT_SECRET,
+    secretOrKey: config.services.api.token.secret,
 }
 
 passport.use(new passportJWT.Strategy(jwtOptions, (payload, done) => {
