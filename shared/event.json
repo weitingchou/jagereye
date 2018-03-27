@@ -8,6 +8,9 @@
     "timestamp": {
       "type": "number"
     },
+    "date": {
+      "type": "date"
+    },
     "appName": {
       "type": "string"
     },
