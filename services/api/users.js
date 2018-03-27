@@ -6,6 +6,7 @@ const { createError, validate, isValidId } = require('./common')
 const { jwt, jwtOptions } = require('./auth/passport')
 const { routesWithAuth } = require('./auth')
 const { ROLES } = require('./constants')
+const config = require('./config')
 
 /*
  * Projections
@@ -122,6 +123,29 @@ async function login(req, res, next) {
     }
 }
 
+async function createAdminUser() {
+    const {
+        username,
+        default_password: password,
+    } = config.services.api.admin;
+
+    try {
+        const user = await models.users.findOne({ username })
+
+        if (!user) {
+            const result = await models.users.create({
+                username,
+                password,
+                role: ROLES.ADMIN,
+            })
+
+            console.log(`Admin user is added, id: ${result.id}`)
+        }
+    } catch (err) {
+        console.error(err)
+    }
+}
+
 /*
  * Routing Table
  */
@@ -136,4 +160,7 @@ routesWithAuth(
 )
 router.post('/login', userValidator, validate, login)
 
-module.exports = router
+module.exports = {
+    users: router,
+    createAdminUser,
+}

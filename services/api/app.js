@@ -3,7 +3,7 @@ const bodyParser = require('body-parser')
 const expressValidator = require('express-validator')
 const cors = require('cors')
 
-const users = require('./users')
+const { users, createAdminUser } = require('./users')
 const analyzers = require('./analyzers')
 const events = require('./events')
 
@@ -34,5 +34,8 @@ app.use((err, req, res, next) => {
     }
     res.status(err.status).send(error)
 })
+
+// Create admin user if it is not existed
+createAdminUser()
 
 module.exports = app
