@@ -1,7 +1,9 @@
 const acl = require('express-acl')
 
+const config = require('../config')
+
 acl.config({
-    baseUrl: 'api/v1',
+    baseUrl: config.services.api.base_url,
     decodedObjectName: 'user',
     path: 'auth',
     filename: 'acl.json',
