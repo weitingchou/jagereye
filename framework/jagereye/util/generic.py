@@ -52,8 +52,7 @@ def now():
     """
     return time.time()
 
-def get_config():
-    config_file = 'config.yml'
+def get_config(config_file='./config.yml'):
     with open(static_util.get_path(config_file), 'r') as f:
         return yaml.load(f)
 

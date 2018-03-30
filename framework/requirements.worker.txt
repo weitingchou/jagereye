@@ -1,5 +1,6 @@
 asyncio-nats-client
 aioredis
 numpy
+pyyaml
 six
 tensorflow-gpu==1.4.1
