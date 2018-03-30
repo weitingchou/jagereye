@@ -63,9 +63,7 @@ async function createUser(req, res, next) {
     } catch (err) {
         if (err.name === 'MongoError') {
             if (err.code === 11000) {
-                const dupKey = err.errmsg.slice(err.errmsg.lastIndexOf('dup key:') + 14, -3)
-
-                return next(createError(400, `Username exists: ${dupKey}`))
+                return next(createError(400, 'Username exists'))
             }
         }
 
