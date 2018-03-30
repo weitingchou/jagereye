@@ -126,3 +126,7 @@ node_modules
 
 # Copied static files in framework
 framework/jagereye/static
+
+# Apple OS X dot junks
+xcode
+.DS_Store
