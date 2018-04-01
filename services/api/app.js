@@ -3,6 +3,8 @@ const bodyParser = require('body-parser')
 const expressValidator = require('express-validator')
 const cors = require('cors')
 
+const config = require('./config')
+const { users, createAdminUser } = require('./users')
 const analyzers = require('./analyzers')
 const events = require('./events')
 
@@ -14,7 +16,8 @@ app.use(bodyParser.urlencoded({ extended: false }))
 app.use(expressValidator())
 
 // Initialize API
-const API_ENTRY='/api/v1'
+const API_ENTRY = `/${config.services.api.base_url}`
+app.use(API_ENTRY, users)
 app.use(API_ENTRY, analyzers)
 app.use(API_ENTRY, events)
 
@@ -32,5 +35,8 @@ app.use((err, req, res, next) => {
     }
     res.status(err.status).send(error)
 })
+
+// Create admin user if it is not existed
+createAdminUser()
 
 module.exports = app
