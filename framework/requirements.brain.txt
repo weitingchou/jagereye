@@ -2,3 +2,4 @@ asyncio-nats-client
 aioredis
 jsonschema
 pymongo
+pyyaml

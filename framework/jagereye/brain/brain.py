@@ -54,6 +54,7 @@ class Brain(object):
             mq_host (str): the host and port of nats server
         """
         self._typename = typename
+        self._logger = logging.Logger(component='brain')
         self._API = API(self._typename)
         self._main_loop = asyncio.get_event_loop()
         # TODO(Ray): check NATS is connected to server, error handler
@@ -103,10 +104,10 @@ class Brain(object):
         anal_ids, worker_ids = await self._worker_agent.get_all_anal_and_worker_ids()
         if not anal_ids:
             return
-        logging.debug('Start restarting if there are configuration records of analyzers')
+        self._logger.info('Start restarting if there are configuration records of analyzers')
         # reset all worker record like 'status' to WorkerStatus.INITIAL
         await self._worker_agent.mset_worker_status(worker_ids, WorkerStatus.INITIAL.name)
-        logging.debug('Reset all workers status to INITIAL')
+        self._logger.debug('Reset all workers status to INITIAL')
         # extract configurations(like pipelines, source) for each worker in worker_ids in mongodb
         configs = await self._worker_agent.mget_worker_configs(anal_ids)
         # flush tickets of analyzer
@@ -124,7 +125,7 @@ class Brain(object):
         await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
         # TODO(Ray): should reset the 'pipelines' for each worker?
         # TODO(Ray): maybe the containers' pipelines is different to the 'pipelines' field in mem db
-        logging.debug('Finish restarting')
+        self._logger.info('Finish restarting')
 
     async def _private_worker_handler(self, recv):
         """asychronous handler for private channel with each workers
@@ -145,19 +146,19 @@ class Brain(object):
             verb = msg['verb']
             context = msg['context']
         except Exception as e:
-            logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
+            self._logger.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
         else:
             if verb == 'hshake-3':
-                logging.debug('Received "hshake-3" in {func}: "{subject} {reply}": {data}'.\
+                self._logger.info('Received "hshake-3" in {func}: "{subject} {reply}": {data}'.\
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
-                logging.debug('finish handshake')
+                self._logger.info('finish handshake')
 
                 # change worker status
                 worker_id = context['workerID']
                 # check worker status is HSHAKE-1
                 worker_status = await self._worker_agent.get_status(worker_id=worker_id)
                 if worker_status != WorkerStatus.HSHAKE_1.name:
-                    logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
+                    self._logger.error('Receive "hshake3" in {}: with unexpected worker status "{}"'.\
                             format(get_func_name(), worker_status))
                     return
                 # update worker status to READY
@@ -181,10 +182,10 @@ class Brain(object):
                     await self._nats_cli.publish(context['ch_to_worker'], str(config_req).encode())
                 else:
                     # no ticket for the analyzer
-                    logging.debug('Receive "hshake3" in {}: no ticket for analyzer {}'.\
+                    self._logger.debug('Receive "hshake3" in {}: no ticket for analyzer {}'.\
                             format(get_func_name(), analyzer_id))
             elif verb == 'config_ok':
-                logging.debug('Received "config_ok" in {func}: "{subject} {reply}": {data}'.\
+                self._logger.info('Received "config_ok" in {func}: "{subject} {reply}": {data}'.\
                     format(func=get_func_name(), subject=ch, reply=reply, data=msg))
                 ticket_id = context['ticket']['ticket_id']
                 worker_id = context['workerID']
@@ -193,7 +194,7 @@ class Brain(object):
                 worker_status = await self._worker_agent.get_status(worker_id=worker_id)
                 if worker_status != WorkerStatus.CONFIG.name:
                     # TODO(Ray): when status not correct, what to do?
-                    logging.error('Receive "config_ok" in {}, but the worker status is {}'.\
+                    self._logger.error('Receive "config_ok" in {}, but the worker status is {}'.\
                             format(get_func_name, worker_status))
                     return
                 # update the status to RUNNING
@@ -207,23 +208,22 @@ class Brain(object):
                 worker_id = context['workerID']
                 # retrieve analyzer_id
                 analyzer_id = await self._worker_agent.get_anal_id(worker_id)
-                logging.debug('Receive event inform in {}.'.format(get_func_name()))
                 # consume events from the worker
                 events = await self._event_agent.consume_from_worker(worker_id)
                 if not events:
                     return
 
-                logging.info('Received events: {}'.format(events))
+                self._logger.info('Received events: {}'.format(events))
                 events_for_notify = self._event_agent.save_in_db(events, analyzer_id)
-                logging.debug('Push events to notification: "{}"'.format(events_for_notify, worker_id))
+                self._logger.debug('Push events to notification: "{}"'.format(events_for_notify, worker_id))
                 await self._nats_cli.publish(CH_NOTIFICATION, str(events_for_notify).encode())
                 # TODO: Send events back to notification service.
             elif verb == 'hbeat':
                 worker_id = context['workerID']
-                logging.debug('receive hbeat: {}'.format(str(msg)))
+                self._logger.debug('receive hbeat: {}'.format(str(msg)))
                 # TODO: error handler
                 if not (await self._worker_agent.update_hbeat(worker_id)):
-                    logging.debug('failed update hbeat for worker {}'.format(worker_id))
+                    self._logger.debug('failed update hbeat for worker {}'.format(worker_id))
 
     async def _public_brain_handler(self, recv):
         """asychronous handler for public channel all initial workers
@@ -245,10 +245,10 @@ class Brain(object):
             verb = msg['verb']
             context = msg['context']
         except Exception as e:
-            logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
+            self._logger.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
         else:
             if verb == 'hshake-1':
-                logging.debug('Received "hshake-1" msg in {func}: "{subject}": {data}'.\
+                self._logger.info('Received "hshake-1" msg in {func}: "{subject}": {data}'.\
                         format(func=get_func_name(), subject=ch, reply=reply, data=msg))
                 try:
                     worker_id = context['workerID']
@@ -256,11 +256,11 @@ class Brain(object):
                     ch_worker_to_brain = context['ch_to_brain']
                     ch_brain_to_worker = context['ch_to_worker']
                 except Exception as e:
-                    logging.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
+                    self._logger.error('Exception in {}, type: {} error: {}'.format(get_func_name(), type(e), e))
                 else:
                     worker_status = await self._worker_agent.get_status(worker_id=worker_id)
                     if worker_status != WorkerStatus.INITIAL.name:
-                        logging.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
+                        self._logger.error('Receive "hshake1" in {}: with unexpected worker status "{}"'.\
                               format(get_func_name(), worker_status))
                         return
                     # update worker status
@@ -286,13 +286,13 @@ class Brain(object):
         msg = jsonify(recv.data)
         timestamp = round(time.time())
 
-        logging.debug('Received in api_handler() "{subject} {reply}": {data}'.\
+        self._logger.info('Received in api_handler() "{subject} {reply}": {data}'.\
                  format(subject=ch, reply=reply, data=msg))
 
         try:
             self._API.validate(msg)
         except InvalidRequestFormat:
-            logging.error('Exception in {}: invalid request format from api'.format(get_func_name()))
+            self._logger.error('Exception in {}: invalid request format from api'.format(get_func_name()))
             return
         except InvalidRequestType:
             # ignore the exception since the request is not for us
@@ -318,13 +318,13 @@ class Brain(object):
             worker_id = await self._worker_agent.get_worker_id(analyzer_id)
             if worker_id:
                 # TODO(Ray): if yes, just re-config worker
-                logging.debug('worker exists, re-configure it')
+                self._logger.info('worker {} exists, re-configure it'.format(worker_id))
                 # XXX: We haven't implement woker reconfiguring yet, so we need
                 # to delete ticket here, otherwise it will block future
                 # operations on analyzer 'analyzer_id'.
                 await self._ticket_agent.delete(analyzer_id)
             else:
-                logging.debug('Create a worker for analyzer "{}"'.format(analyzer_id))
+                self._logger.info('Create a worker for analyzer "{}"'.format(analyzer_id))
                 # reply back to api_server
                 await self._nats_cli.publish(reply, jsondumps(self._API.reply_status(WorkerStatus.CREATE.name)).encode())
                 ticket_id = analyzer_id
@@ -362,7 +362,7 @@ class Brain(object):
             }
             await self._nats_cli.publish(CH_BRAIN_TO_RES, str(req).encode())
         else:
-            logging.error('Undefined command: {}'.format(msg['command']))
+            self._logger.error('Undefined command: {}'.format(msg['command']))
 
     async def _res_handler(self, recv):
         """asychronous handler for listen response from resource manager
@@ -378,7 +378,7 @@ class Brain(object):
         # Check has error or not.
         if 'error' in msg:
             # TODO(JiaKuan Su): Error handling.
-            logging.error('Error code: "{}" from resource manager'
+            self._logger.error('Error code: "{}" from resource manager'
                           .format(msg['error']['code']))
             return
         if msg['command'] == MESSAGES['ch_brain_res']['CREATE_WORKER']:
@@ -387,7 +387,7 @@ class Brain(object):
             worker_id = msg['response']['workerId']
             analyzer_id = msg['analyzerId']
 
-            logging.info('Receive launch ok in {} for worker "{}":analyzer "{}"'.
+            self._logger.info('Receive launch ok in {} for worker "{}":analyzer "{}"'.
                     format(get_func_name(), worker_id, analyzer_id))
             await self._worker_agent.create_analyzer(analyzer_id, worker_id)
         elif msg['command'] == MESSAGES['ch_brain_res']['REMOVE_WORKER']:

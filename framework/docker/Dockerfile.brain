@@ -24,6 +24,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 
 # Install JagerEye framework library.
 # TODO(JiaKuan Su): Use .pyc only.
+
 WORKDIR jagereye
 COPY setup.py .
 COPY setup.cfg .

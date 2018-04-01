@@ -50,3 +50,47 @@ apps:
     tripwire:
         version: "0.0.1"
         network_mode: host
+logging:
+    version: 1
+    syslog:
+        host: &syslog_server_host "localhost"
+        port: &syslog_server_port 514
+    disable_existing_loggers: False
+    filters:
+        hbeat_filter:
+            (): jagereye.util.logging.HbeatFilter
+            is_allowed: False
+    formatters:
+        jagereye_formatter:
+          format: "jagereye - %(levelname)s - %(message)s"
+        third_party_formatter:
+          format: "third_party - %(levelname)s - %(message)s"
+    handlers:
+        third_party_stdout_handler:
+            class: logging.StreamHandler
+            formatter: third_party_formatter
+            stream: ext://sys.stdout
+        third_party_syslog_handler:
+            class: logging.handlers.SysLogHandler
+            level: DEBUG
+            formatter: third_party_formatter
+            address: [*syslog_server_host, *syslog_server_port]
+            facility: local1
+        jagereye_syslog_handler:
+            class: logging.handlers.SysLogHandler
+            level: DEBUG
+            formatter: jagereye_formatter
+            filters: [hbeat_filter]
+            address: [*syslog_server_host, *syslog_server_port]
+            facility: local1
+        jagereye_stdout_handler:
+            class: logging.StreamHandler
+            formatter: third_party_formatter
+            stream: ext://sys.stdout
+    loggers:
+        jagereye_logger:
+            handlers: [jagereye_syslog_handler]
+            propagate: False
+    root:
+        level: NOTSET
+        handlers: [third_party_syslog_handler]

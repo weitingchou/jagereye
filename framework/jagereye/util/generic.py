@@ -4,7 +4,9 @@ import inspect
 import signal
 import threading
 import time
+import yaml
 
+from jagereye.util import static_util
 
 class _FuncThread(threading.Thread):
     """Inner class for executing the function in a thread."""
@@ -42,7 +44,6 @@ def get_func_name():
     """
     return inspect.stack()[1][3] + str('()')
 
-
 def now():
     """Get current timestamp.
 
@@ -51,6 +52,9 @@ def now():
     """
     return time.time()
 
+def get_config(config_file='./config.yml'):
+    with open(static_util.get_path(config_file), 'r') as f:
+        return yaml.load(f)
 
 def exec_timeout(timeout, func, *args, **kwargs):
     """Execute a function with timeout.

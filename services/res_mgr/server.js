@@ -7,6 +7,7 @@ const Promise = require('bluebird');
 const redis = require('redis');
 const shell = require('shelljs');
 const uuidv4 = require('uuid/v4');
+const yaml = require('read-yaml')
 
 Promise.promisifyAll(redis.RedisClient.prototype);
 Promise.promisifyAll(redis.Multi.prototype);
@@ -22,6 +23,8 @@ const SHARED_ROOT =
     process.env.HOME;
 const HOST_SHARED_DIR = `${SHARED_ROOT}/jagereye_shared`;
 const CONTAINER_SHARED_DIR = '/root/jagereye_shared';
+
+const CONFIG = yaml.sync('./config.yml');
 
 // The possible worker status.
 const WORKER_STATUS = {
@@ -111,14 +114,21 @@ async function createWorker(workerId, workerName) {
     // TODO: Read the network mode configuration from 'shared/config.*.yml' instead
     //       of hardcoded '--network="host"'.
     const params = {
+        LogConfig: {
+            Type:'syslog',
+                Config:{
+                    'syslog-address': 'udp://'+CONFIG.logging.syslog.host+':'+CONFIG.logging.syslog.port,
+                    'syslog-facility': 'local1',
+                    'tag': workerId + ' - thrid_party pid:'
+                }
+        },
         Image: workerName,
         Runtime: 'nvidia',
         NetworkMode: 'host',
         name: workerId,
         Env: [`worker_id=${workerId}`],
-        Binds: [`${HOST_SHARED_DIR}:${CONTAINER_SHARED_DIR}`],
+        Binds: [`${HOST_SHARED_DIR}:${CONTAINER_SHARED_DIR}`]
     };
-
     return docker.createContainer(params).then((container) => {
         return container.start();
     });
